@@ -3,11 +3,17 @@ Previous researches have shown that securities and other financial instruments m
 
 
 # Progress
-## Oct 2017 
-- Develop crawler for Twitter using REST API. Schedule weekly update since historical data is limited to 1 week for free API
+## Oct - Nov 17 
+- Develop crawler for Twitter using REST API. Schedule weekly update since historical data is limited to ~ 10 days for free API
 - Crawler for Reddit base on Pushshift.io API, scripts collects all submissions data looping over rate limit.
-## Nov 2017
 - Finalize preprocessing pipeline
+
+## Dec 17 - Feb 18
 - Implement baseline models for sentiment analysis and topic modeling
 - Framework for Ensemble model and hyper parameter testing
 - Granger causality test for time series analysis with market data
+
+## Mar 18
+- Restructure workflow pipeline
+- Evaluation between pre-defined topics (8) and topic modeling generated topics (correlations comparisons)
+![Workflow](https://github.com/o0oBluePhoenixo0o/Crypto-Senti/blob/master/img/Workflow_Mar18.JPG)
