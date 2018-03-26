@@ -7,6 +7,8 @@ options(stringsAsFactors = FALSE)
 #Set up working directory
 setwd("~/GitHub/NextBigCrypto-Senti/")
 
+#https://github.com/SebastianKirsch123/ensemble_sentiment_classification/blob/master/Ensemble_Sentiment_Classification.pdf
+
 # install packages if not available
 packages <- c("ldatuning", #tuning LDA topic numbers
               "readr", #read data
@@ -22,11 +24,14 @@ packages <- c("ldatuning", #tuning LDA topic numbers
               "stringi", #string manipulation
               "wordcloud","tidyquant"
 )
-
+#remove.packages(c("tidytext", "ggplot2"))
 if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
   install.packages(setdiff(packages, rownames(installed.packages())))
 }
 lapply(packages, require, character.only = TRUE)
+
+# line 140, change to higher interval
+#trace(utils:::unpackPkgZip, edit=TRUE)
 
 #########################################################################
 #Input data
@@ -120,6 +125,8 @@ df$processed  <- sapply(df$processed, function(x) gsub("[[:space:]]+$", "",x))
 
 #test with removing number 02.03.2018
 df$processed <- sapply(df$processed, function(x) removeNumbers(x))
+# To lower case
+df$processed <- tolower(df$processed)
 
 # Remove duplicates (after rmv url)
 df <- df[!duplicated(df$processed),]
@@ -127,6 +134,8 @@ df <- df[!duplicated(df$processed),]
 df <- df[!(is.na(df$processed) | df$processed==""), ]
 # Remove <f0>
 df$processed <- gsub("<f0>", "", df$processed)
+
+
 ###################################################################
 
 #backup
@@ -220,104 +229,108 @@ df <- addtopic(df,topic8.project,'8')
 maindf <- df[,which(colnames(df) %in% c('created_at','status_id','processed',
                                         'topic1','topic2','topic3','topic4',
                                         'topic5','topic6','topic7','topic8'))]
+# Change statusid type
+maindf$status_id <- as.character(maindf$status_id)
 
 ###############################
 # Word cloud for each topic
 setwd("~/GitHub/NextBigCrypto-Senti/x. Documents/images")
+
 dev.new()
 topic1 <- maindf %>%
-  select(created_at, processed,topic1) %>%
+  select(created_at, processed,status_id,topic1) %>%
   filter(topic1==1)
 
 topic1 %>%  unnest_tokens(word,processed)%>%
   count(word) %>%
   mutate(word = removeNumbers(word)) %>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light(),main="Title"))
-savePlot(paste0(name.df,'_topic1_Regulation'),type='png')
+savePlot(paste0(name.df,'_topic1_Regulation_',Sys.Date()),type='png')
 dev.off()
+
 #
 dev.new()
 topic2 <- maindf %>%
-  select(created_at, processed,topic2) %>%
+  select(created_at, processed,status_id,topic2) %>%
   filter(topic2==1)
 
 topic2 %>% unnest_tokens(word,processed)%>%
   count(word) %>%
   mutate(word = removeNumbers(word)) %>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light()))
-savePlot(paste0(name.df,'_topic2_TA'),type='png')
+savePlot(paste0(name.df,'_topic2_TA_',Sys.Date()),type='png')
 dev.off()
 #
 dev.new()
 topic3 <- maindf %>%
-  select(created_at, processed,topic3) %>%
+  select(created_at, processed,status_id,topic3) %>%
   filter(topic3==1)
 
 topic3 %>% unnest_tokens(word,processed)%>%
   count(word) %>%
   mutate(word = removeNumbers(word)) %>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light()))
-savePlot(paste0(name.df,'_topic3_ICO'),type='png')
+savePlot(paste0(name.df,'_topic3_ICO_',Sys.Date()),type='png')
 dev.off()
 #
 dev.new()
 topic4 <- maindf %>%
-  select(created_at, processed,topic4) %>%
+  select(created_at, processed,status_id,topic4) %>%
   filter(topic4==1)
 
 topic4 %>%  unnest_tokens(word,processed)%>%
   count(word) %>%
   mutate(word = removeNumbers(word)) %>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light()))
-savePlot(paste0(name.df,'_topic4_incidents'),type='png')
+savePlot(paste0(name.df,'_topic4_incidents_',Sys.Date()),type='png')
 dev.off()
 #
 dev.new()
 topic5 <- maindf %>%
-  select(created_at, processed,topic5) %>%
+  select(created_at, processed,status_id,topic5) %>%
   filter(topic5==1)
 
 topic5 %>% unnest_tokens(word,processed)%>%
   count(word) %>%
   mutate(word = removeNumbers(word)) %>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light()))
-savePlot(paste0(name.df,'_topic5_trading'),type='png')
+savePlot(paste0(name.df,'_topic5_trading_',Sys.Date()),type='png')
 dev.off()
 #
 dev.new()
 topic6 <- maindf %>%
-  select(created_at, processed,topic6) %>%
+  select(created_at, processed,status_id,topic6) %>%
   filter(topic6==1)
 
 topic6 %>% unnest_tokens(word,processed)%>%
   count(word) %>%
   mutate(word = removeNumbers(word)) %>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light()))
-savePlot(paste0(name.df,'_topic6_exchanges'),type='png')
+savePlot(paste0(name.df,'_topic6_exchanges_',Sys.Date()),type='png')
 dev.off()
 #
 dev.new()
 topic7 <- maindf %>%
-  select(created_at, processed,topic7) %>%
+  select(created_at, processed,status_id,topic7) %>%
   filter(topic7==1) 
 
 topic7 %>%  unnest_tokens(word,processed)%>%
   count(word) %>%
   mutate(word = removeNumbers(word)) %>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light()))
-savePlot(paste0(name.df,'_topic7_mainstream'),type='png')
+savePlot(paste0(name.df,'_topic7_mainstream_',Sys.Date()),type='png')
 dev.off()
 #
 dev.new()
 topic8 <- maindf %>%
-  select(created_at, processed,topic8) %>%
+  select(created_at, processed,status_id,topic8) %>%
   filter(topic8==1)
 
 topic8 %>%  unnest_tokens(word,processed)%>%
   count(word) %>%
   mutate(word = removeNumbers(word)) %>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light()))
-savePlot(paste0(name.df,'_topic8_project'),type='png')
+savePlot(paste0(name.df,'_topic8_project_',Sys.Date()),type='png')
 dev.off()
 
 setwd("~/GitHub/NextBigCrypto-Senti/")
@@ -369,7 +382,6 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
     }
   }
 }
-
 
 #######################################################
 
@@ -441,3 +453,36 @@ plot.senti(maindf,'Overall')
 
 #save backup
 save.image('Predefined_Topic_BTC_v1.RData')
+
+
+# Testing ground 22.03.18
+
+load('./Models/Predefined_Topic_BTC_v1.RData')
+
+# Convert to tidy
+topic5_tidy <- topic5 %>%
+  unnest_tokens(word,processed)%>%
+  # Define a new column using floor_date()
+  mutate(date = floor_date(created_at, unit = "1 day")) %>%
+  group_by(date,status_id) %>%
+  mutate(total_words = n()) %>%
+  ungroup()
+
+# AFINN Lexcicon
+sentiment_messages_afinn <- topic5_tidy %>%
+  inner_join(get_sentiments("afinn"), by = "word") %>%
+  group_by(date,status_id) %>%
+  summarize(sentiment = mean(score),
+            words = n()) %>%
+  ungroup()
+
+no_pos_afinn <- sentiment_messages_afinn %>%
+  
+
+# NRC Lexicon
+sentiment_messages_nrc <- topic5_tidy %>%
+  inner_join(get_sentiments("nrc"), by = "word") %>%
+  group_by(date,status_id) %>%
+  ungroup() %>%
+  filter(sentiment %in% c("positive", "negative"))
+
