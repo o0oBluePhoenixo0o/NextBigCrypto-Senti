@@ -21,6 +21,10 @@ if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
 }
 lapply(packages, require, character.only = TRUE)
 
+# ZIP PATH for dev tools
+if(devtools::find_rtools()) Sys.setenv(R_ZIPCMD= file.path(devtools:::get_rtools_path(),"zip"))
+library(openxlsx)
+
 ###################################################
 
 #Input data
@@ -158,8 +162,7 @@ for (i in 2:50){
 
 # 26.03
 
-if(devtools::find_rtools()) Sys.setenv(R_ZIPCMD= file.path(devtools:::get_rtools_path(),"zip"))
-ibrary(openxlsx)
+
 write.xlsx(manual.df,'Manual_Dataset_2603.xlsx')
 
 manual.done <- read.xlsx('Manual_Dataset_2603.xlsx')
