@@ -162,8 +162,9 @@ topic3.ICO <- c("ICO", "airdrop", "discord", "presale", "telegram",
                 "join", "follow", "free", "team", "pre-ICO")
 
 # incidents (negative)
-topic4.incidents <- c("hack", "leak", "ban", "scam", "FUD", #fear - uncertain - doubt
-                      "FOMO", "lose", "fail", "stolen", "stole", "steal","ponzi")
+topic4.incidents <- c("hack", "leak", "ban", "fake", "scam", "FUD", #fear - uncertain - doubt
+                      "FOMO", "lose", "fail", "stolen", "stole", "steal","ponzi",
+                      "pyramid scheme", "rob")
 
 # trading
 topic5.trading <- c("list", "exchange", "trade", "price", "buy", "sell", "HODL",
@@ -180,8 +181,18 @@ topic7.mainstream <- c("media", "coindesk", "cryptonews","cnbc", "bloomberg", "c
 
 # project details
 topic8.project <- c("partnership", "list", "team", "update", "github", "meetup",
-                    "conference","announce","announcement", "launch", "release")
+                    "conference","milestone","announce","announcement", "launch", "release",
+                    "whitepaper","yellowpaper")
 
+# technology (01.04.2018)
+topic9.technology <- c("lightning network", "plasma", "scaling", "scale", 
+                       "POS","POW","DPOS","POE","masternode","privacy","zerocoin",
+                       "tumbling","coin mixer","segwit","algorithm")
+
+# mining (01.04.2018)
+topic10.mining <- c("POW","mining","block reward","ASIC","GPU Mining","NVIDIA",
+                    "AMD","GTX","farm","halving","pool","mining pool","znomp","nomp",
+                    "miningcore","suprnova","miningpoolhub")
 
 # Function add topic id to main df
 addtopic <- function(maindf, topicdf, topicid){
@@ -213,6 +224,8 @@ df$topic5 <- 0
 df$topic6 <- 0
 df$topic7 <- 0
 df$topic8 <- 0
+df$topic9 <- 0
+df$topic10 <- 0
 
 # Add topicid to main df
 df <- addtopic(df,topic1.regulation,'1')
@@ -223,12 +236,15 @@ df <- addtopic(df,topic5.trading,'5')
 df <- addtopic(df,topic6.exchanges,'6')
 df <- addtopic(df,topic7.mainstream,'7')
 df <- addtopic(df,topic8.project,'8')
+df <- addtopic(df,topic9.technology,'9')
+df <- addtopic(df,topic10.mining,'10')
 
 # Simple Sentiment analysis
 
 maindf <- df[,which(colnames(df) %in% c('created_at','status_id','processed',
                                         'topic1','topic2','topic3','topic4',
-                                        'topic5','topic6','topic7','topic8'))]
+                                        'topic5','topic6','topic7','topic8',
+                                        'topic9','topic10'))]
 # Change statusid type
 maindf$status_id <- as.character(maindf$status_id)
 
@@ -260,6 +276,7 @@ topic2 %>% unnest_tokens(word,processed)%>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light()))
 savePlot(paste0(name.df,'_topic2_TA_',Sys.Date()),type='png')
 dev.off()
+
 #
 dev.new()
 topic3 <- maindf %>%
@@ -272,6 +289,7 @@ topic3 %>% unnest_tokens(word,processed)%>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light()))
 savePlot(paste0(name.df,'_topic3_ICO_',Sys.Date()),type='png')
 dev.off()
+
 #
 dev.new()
 topic4 <- maindf %>%
@@ -284,6 +302,7 @@ topic4 %>%  unnest_tokens(word,processed)%>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light()))
 savePlot(paste0(name.df,'_topic4_incidents_',Sys.Date()),type='png')
 dev.off()
+
 #
 dev.new()
 topic5 <- maindf %>%
@@ -296,6 +315,7 @@ topic5 %>% unnest_tokens(word,processed)%>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light()))
 savePlot(paste0(name.df,'_topic5_trading_',Sys.Date()),type='png')
 dev.off()
+
 #
 dev.new()
 topic6 <- maindf %>%
@@ -308,6 +328,7 @@ topic6 %>% unnest_tokens(word,processed)%>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light()))
 savePlot(paste0(name.df,'_topic6_exchanges_',Sys.Date()),type='png')
 dev.off()
+
 #
 dev.new()
 topic7 <- maindf %>%
@@ -320,6 +341,7 @@ topic7 %>%  unnest_tokens(word,processed)%>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light()))
 savePlot(paste0(name.df,'_topic7_mainstream_',Sys.Date()),type='png')
 dev.off()
+
 #
 dev.new()
 topic8 <- maindf %>%
@@ -331,6 +353,32 @@ topic8 %>%  unnest_tokens(word,processed)%>%
   mutate(word = removeNumbers(word)) %>%
   with(wordcloud(word, n, max.words = 100, colors = palette_light()))
 savePlot(paste0(name.df,'_topic8_project_',Sys.Date()),type='png')
+dev.off()
+
+#
+dev.new()
+topic9 <- maindf %>%
+  select(created_at, processed,status_id,topic9) %>%
+  filter(topic9==1)
+
+topic9 %>%  unnest_tokens(word,processed)%>%
+  count(word) %>%
+  mutate(word = removeNumbers(word)) %>%
+  with(wordcloud(word, n, max.words = 100, colors = palette_light()))
+savePlot(paste0(name.df,'_topic9_technology_',Sys.Date()),type='png')
+dev.off()
+
+#
+dev.new()
+topic10 <- maindf %>%
+  select(created_at, processed,status_id,topic10) %>%
+  filter(topic10==1)
+
+topic10 %>%  unnest_tokens(word,processed)%>%
+  count(word) %>%
+  mutate(word = removeNumbers(word)) %>%
+  with(wordcloud(word, n, max.words = 100, colors = palette_light()))
+savePlot(paste0(name.df,'_topic10_mining_',Sys.Date()),type='png')
 dev.off()
 
 setwd("~/GitHub/NextBigCrypto-Senti/")
@@ -449,40 +497,42 @@ plot.senti(topic5,'Trading')
 plot.senti(topic6,'Exchanges')
 plot.senti(topic7,'Mainstream Media')
 plot.senti(topic8,'Project Updates')
+plot.senti(topic9,'Technology')
+plot.senti(topic10,'Mining')
 plot.senti(maindf,'Overall')
 
 #save backup
-save.image('Predefined_Topic_BTC_v1.RData')
+save.image(paste0('Predefined_Topic_BTC_',Sys.Date(),'.RData'))
 
 
 # Testing ground 22.03.18
-
-load('./Models/Predefined_Topic_BTC_v1.RData')
-
-# Convert to tidy
-topic5_tidy <- topic5 %>%
-  unnest_tokens(word,processed)%>%
-  # Define a new column using floor_date()
-  mutate(date = floor_date(created_at, unit = "1 day")) %>%
-  group_by(date,status_id) %>%
-  mutate(total_words = n()) %>%
-  ungroup()
-
-# AFINN Lexcicon
-sentiment_messages_afinn <- topic5_tidy %>%
-  inner_join(get_sentiments("afinn"), by = "word") %>%
-  group_by(date,status_id) %>%
-  summarize(sentiment = mean(score),
-            words = n()) %>%
-  ungroup()
-
-no_pos_afinn <- sentiment_messages_afinn %>%
-  
-
-# NRC Lexicon
-sentiment_messages_nrc <- topic5_tidy %>%
-  inner_join(get_sentiments("nrc"), by = "word") %>%
-  group_by(date,status_id) %>%
-  ungroup() %>%
-  filter(sentiment %in% c("positive", "negative"))
+# 
+# load('./Models/Predefined_Topic_BTC_v1.RData')
+# 
+# # Convert to tidy
+# topic5_tidy <- topic5 %>%
+#   unnest_tokens(word,processed)%>%
+#   # Define a new column using floor_date()
+#   mutate(date = floor_date(created_at, unit = "1 day")) %>%
+#   group_by(date,status_id) %>%
+#   mutate(total_words = n()) %>%
+#   ungroup()
+# 
+# # AFINN Lexcicon
+# sentiment_messages_afinn <- topic5_tidy %>%
+#   inner_join(get_sentiments("afinn"), by = "word") %>%
+#   group_by(date,status_id) %>%
+#   summarize(sentiment = mean(score),
+#             words = n()) %>%
+#   ungroup()
+# 
+# no_pos_afinn <- sentiment_messages_afinn %>%
+#   
+# 
+# # NRC Lexicon
+# sentiment_messages_nrc <- topic5_tidy %>%
+#   inner_join(get_sentiments("nrc"), by = "word") %>%
+#   group_by(date,status_id) %>%
+#   ungroup() %>%
+#   filter(sentiment %in% c("positive", "negative"))
 

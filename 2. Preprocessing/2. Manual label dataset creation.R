@@ -145,16 +145,17 @@ setwd("~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/")
 a <- as.data.frame(read_csv(dir(pattern=paste0('^',1,'_'))[1],
                             locale = locale(encoding = 'latin1')))
 clean.df <- Cleandata(a)
-manual.df <- sample_n(clean.df,100)
+#manual.df <- sample_n(clean.df,100)
+write.csv(clean.df,paste0('1_cleandf_',Sys.Date(),'.csv'))
 
-# Get the rest from 2 -> 50
-for (i in 2:50){
+# Get the rest from 2 -> 10
+for (i in 2:10){
   a <- as.data.frame(read_csv(dir(pattern=paste0('^',i,'_'))[1],
                                locale = locale(encoding = 'latin1')))
   clean.df <- Cleandata(a)
   write.csv(clean.df,paste0(i,'_cleandf_',Sys.Date(),'.csv'))
-  sample.df <- sample_n(clean.df,100)
-  manual.df <- bind_rows(manual.df,sample.df)
+  #sample.df <- sample_n(clean.df,100)
+  #manual.df <- bind_rows(manual.df,sample.df)
   print(paste0('Finish adding samples from file number: ',i))
 }
 
