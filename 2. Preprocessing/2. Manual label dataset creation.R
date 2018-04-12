@@ -12,7 +12,9 @@ packages <- c("readr", #read data
               "lubridate", #date time conversion
               "dplyr", #date manipulation
               "data.table",
-              "stringi" #string manipulation
+              "stringi", #string manipulation
+              "stringr",
+              "tm"
 )
 
 #remove.packages(c("tidytext", "ggplot2"))
@@ -110,10 +112,13 @@ Cleandata <- function(df) {
   # will remove stopwords later in dtm step
   df$processed <- sapply(df$processed, function(x) removeWords(x,stopwords("english"))) 
   
-  # remove punctuations except for # $ @
-  #df$processed <- sapply(df$processed, function(x) removePunctuation(x))
-  df$processed <- sapply(df$processed, function(x) gsub( "[^#@$a-zA-Z\\s]" , "" , x , perl = TRUE ))
+  # Get rid of references to other screennames
+  df$processed <- str_replace_all(df$processed,"@[a-z,A-Z]*","")  
   
+  # remove punctuations except for # $ 
+  df$processed <- sapply(df$processed, function(x) gsub( "[^#$a-zA-Z\\s]" , "" , x , perl = TRUE ))
+  
+  # Apply functions
   df$processed <- sapply(df$processed, function(x) AposToSpace(x)) 
   df$processed <- sapply(df$processed, function(x) stripWhitespace(x))
   
@@ -146,24 +151,22 @@ a <- as.data.frame(read_csv(dir(pattern=paste0('^',1,'_'))[1],
                             locale = locale(encoding = 'latin1')))
 clean.df <- Cleandata(a)
 #manual.df <- sample_n(clean.df,100)
-write.csv(clean.df,paste0('1_cleandf_',Sys.Date(),'.csv'))
+write.csv(clean.df,paste0('clean_df/1_cleandf_',Sys.Date(),'.csv'))
 
 # Get the rest from 2 -> 10
 for (i in 2:10){
   a <- as.data.frame(read_csv(dir(pattern=paste0('^',i,'_'))[1],
                                locale = locale(encoding = 'latin1')))
   clean.df <- Cleandata(a)
-  write.csv(clean.df,paste0(i,'_cleandf_',Sys.Date(),'.csv'))
+  write.csv(clean.df,paste0('clean_df/',i,'_cleandf_',Sys.Date(),'.csv'))
   #sample.df <- sample_n(clean.df,100)
   #manual.df <- bind_rows(manual.df,sample.df)
   print(paste0('Finish adding samples from file number: ',i))
 }
 
-#save.image('Manual_2603.RData')
-
+# save.image('Manual_0404.RData')
+# load('Manual_0404.RData')
 # 26.03
-
-
-write.xlsx(manual.df,'Manual_Dataset_2603.xlsx')
-
-manual.done <- read.xlsx('Manual_Dataset_2603.xlsx')
+# write.xlsx(manual.df,'Manual_Dataset_2603.xlsx')
+# 
+# manual.done <- read.xlsx('Manual_Dataset_2603.xlsx')
