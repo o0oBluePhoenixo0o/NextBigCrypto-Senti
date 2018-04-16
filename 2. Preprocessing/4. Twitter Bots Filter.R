@@ -57,27 +57,38 @@ for (i in 1:nrow(coins_list)){
 final.user_list <- unique(final.user_list)
 final.user_list$botprob <- NA
 
+# Set working directory back to Models folder
+setwd("~/GitHub/NextBigCrypto-Senti/Models")
+
 # Determine whether a Twitter ID is a bot or not (probability - gradient boosting machine)
-for (i in 61109:nrow(final.user_list)){  
-  if (is.null(final.user_list$botprob[i])| final.user_list$botprob[i] %in% c(""," ")) {next}
+j <- 0 #counter
+
+for (i in 56699:nrow(final.user_list)){
+  if (is.na(final.user_list$botprob[i]) == FALSE) { 
+    print(paste0('Already analyzed user ',final.user_list$screen_name[i],' at position: ',i))
+    next}
   
-  if (i %% 180 ==0){
-    print('Pause 15 mins due to REST API limit')
+  if (j %% 180 ==0 & j != 0){
+    print('Pause 15 mins due to REST API limit. Reseting queue')
     Sys.sleep(900) #sleep 15 min due to REST API
     # Save backup
     write.xlsx(final.user_list,paste0('Twitter_Bot_Users_(Working).xlsx'))
-    } 
+    j <- 0 #reset counter
+  } 
+  
   tryCatch({
     final.user_list$botprob[i] <- botrnot(final.user_list$screen_name[i])$prob_bot
-  }, error=function(e){cat(i," ERROR :",conditionMessage(e), "\n")})
-  if (i %% 1000 ==0){print(paste0('Complete scanning ',i,' users'))}
+  }, error=function(e){cat("User position ",i," has ERROR :",conditionMessage(e), "\n")})
+  
+  print(paste0('Scanning user ',i,' at position ',j,' in queue'))
+  j <- j + 1 #increase counter
+  
 }
 
-# Set working directory back to Models folder
-setwd("~/GitHub/NextBigCrypto-Senti/Models")
+
 # Save final user list
 write.xlsx(final.user_list,paste0('Twitter_Bot_Users_(Final).xlsx'))
-save.image(paste0('Twitter_Bot_Final_',Sys.Date(),'.RData'))
+save.image(paste0('Twitter_Bot_Final_',Sys.Date(),'.RData'))i
 
 # setwd("~/GitHub/NextBigCrypto-Senti")
 # final.user_list <- read.xlsx('./Models/Twitter_Bot_Users_(Working).xlsx')

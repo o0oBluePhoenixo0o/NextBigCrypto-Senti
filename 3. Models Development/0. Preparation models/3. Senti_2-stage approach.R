@@ -41,8 +41,8 @@ library(openxlsx)
 
 ########################################################
 
-# Read the manual dataset (current ~2000 available messages)
-manual.df <- read.xlsx('Manual_Dataset_0804_labeling.xlsx') %>%
+# Read the manual dataset (current ~2500 available messages)
+manual.df <- read.xlsx('Manual_Dataset_1004_labeling.xlsx') %>%
   select(status_id,text,processed,sentiment,trade_senti) %>%
   filter(sentiment %in% c(-1,0,1))
 
@@ -54,28 +54,23 @@ manual.df$processed <- sapply(manual.df$processed, function(x) stripWhitespace(x
 manual.df <- manual.df[!(is.na(manual.df$processed) | manual.df$processed %in% c(""," ")), ]
 
 ########################################################
-# Preprocessing
+# Preprocessing (1-gram)
 
 corp <- Corpus(VectorSource(manual.df$processed))
 manual.df$sentiment <- as.factor(manual.df$sentiment)
 
 # Extract frequent terms
-frequencies <- DocumentTermMatrix(corp)
+#frequencies <- DocumentTermMatrix(corp)
 
-# TF-IDF weighting 09.04.2018
-#frequencies <- DocumentTermMatrix(corp,
-#                                  control = list(weighting = function(x) weightTfIdf(x, normalize = FALSE)))
+# TF-IDF weighting 16.04.2018 (2-stage)
+frequencies <- DocumentTermMatrix(corp,
+                                 control = list(weighting = function(x) weightTfIdf(x, normalize = FALSE)))
 
 # Remove these words that are not used very often. Keep terms that appear in 0.5% or more of the dataset
 sparse <- removeSparseTerms(frequencies, 0.995)
 
 ResultSparse <- as.data.frame(as.matrix(sparse))
 colnames(ResultSparse) <- make.names(colnames(ResultSparse))
-
-frequencies
-
-sparse
-
 
 # SVM (2-stage)
 # Add senti_sub (subjectivity detection)
@@ -98,11 +93,18 @@ split <- sample.split(ResultSparse$senti_sub, SplitRatio=0.8)
 trainSparse <- subset(ResultSparse, split==TRUE)
 testSparse <- subset(ResultSparse, split==FALSE)
 
-# k-fold validation (5)
-train_control <- trainControl(method="cv", number=5)
+# k-fold validation (10)
+train_control <- trainControl(method="cv", number = 10)
+
+
+#########################################
+#                                       #
+#   SUBJECTIVITY DETECTION (STAGE 1)    #
+#                                       #
+#########################################
 
 ###############################################
-# SVM (stage 1 - subjectivity detection)
+# SVM
 
 SVM_sub_kfold <- svm(formula = senti_sub~., 
                      data = trainSparse, 
@@ -114,7 +116,77 @@ predictSVM_sub_kfold <- predict(SVM_sub_kfold, newdata=testSparse)
 
 cmSVM_sub_kfold <-   table(testSparse$senti_sub, predictSVM_sub_kfold)
 
-metrics(cmSVM_sub_kfold) #65% / avg Acc 76%
+metrics(cmSVM_sub_kfold) #65% - term freq / 67% - tf-idf
+
+#############################################################
+# Naive Bayes
+
+NBayes_sub <- train(senti_sub ~., 
+                data = trainSparse, 
+                laplace = 3, 
+                model = "nb", 
+                trControl = train_control)
+
+predictionsNB <- predict(NBayes_sub, as.data.frame(testSparse))
+
+cmNB_sub <- table(testSparse$senti_sub, predictionsNB)
+
+metrics(cmNB_sub) #67% - term freq / 71% - tf-idf
+
+###############################################
+
+# H2O GBM
+h2o.init()
+
+# Build a training and testing set for H2O environment
+
+trainH2O <- as.h2o(trainSparse)
+testH2O <- as.h2o(testSparse)
+
+# Train GBM model
+gbm.model <- h2o.gbm(  training_frame = trainH2O,
+                       validation_frame = testH2O,
+                       x=2:ncol(trainSparse),            
+                       y=1,         
+                       ntrees = 500, 
+                       max_depth = 50, 
+                       learn_rate = 0.3, 
+                       nfolds = 10,
+                       seed = 1234)
+#model_path <- h2o.saveModel(object=gbm.model, path=getwd(), force=TRUE)
+#print(model_path)
+predictionsGBM <- as.data.frame(h2o.predict(gbm.model,testH2O))
+
+cmGBM <-   table(testSparse$senti_sub, predictionsGBM$predict)
+
+confusionMatrix(testSparse$senti_sub, predictionsGBM$predict)
+
+metrics(cmGBM) #66% - term freq
+
+###################################################################
+# H2O DRF
+
+h2o_drf <- h2o.randomForest(    
+  training_frame = trainH2O,
+  validation_frame = testH2O,
+  x=2:ncol(trainSparse),            
+  y=1,                          
+  ntrees = 500,                 # Increase max trees to 500 
+  max_depth = 30,               # Increase depth, from 20
+  nbins_cats = 5000,
+  nfolds = 10, 
+  seed = 1234)                  #
+
+#model_path <- h2o.saveModel(object=h2o_drf, path=getwd(), force=TRUE)
+#print(model_path)
+predictionsDRF <- as.data.frame(h2o.predict(h2o_drf,testH2O))
+cmDRF <- table(testSparse$senti_sub, predictionsDRF$predict)
+
+confusionMatrix(testSparse$senti_sub, predictionsDRF$predict)
+
+metrics(cmDRF) #70% - term freq / 71% - tf-idf
+
+
 
 
 ##########################################################################################################
