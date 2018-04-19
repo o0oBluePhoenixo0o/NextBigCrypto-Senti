@@ -1,6 +1,6 @@
 # Test run sentiment analysis models on Manual dataset
 # 08.04.2018
-
+# 19.04.2018 - Bigram test
 # clear the environment
 rm(list= ls())
 
@@ -19,7 +19,6 @@ packages <- c("readr", #read data
               "tm", # text mining package
               "textmineR",
               "tidytext",
-              "topicmodels",
               "ggplot2", # plotting package
               "quanteda", #kwic function search phrases
               "xtable", "DT", #viewing data type from quanteda
@@ -28,7 +27,7 @@ packages <- c("readr", #read data
               "caTools","caret", "rpart", "h2o","e1071","RWeka",
               "randomForest"
 )
-#remove.packages(c("tidytext", "ggplot2"))
+
 if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
   install.packages(setdiff(packages, rownames(installed.packages())))
 }
@@ -45,14 +44,19 @@ library(openxlsx)
 # Neutral	1055
 # Negative	333
 
-# Read the manual dataset (current ~2000 available messages)
+# Read the manual dataset (current ~2500 available messages)
 manual.df <- read.xlsx('Manual_Dataset_1004_labeling.xlsx') %>%
-  select(status_id,text,processed,sentiment,trade_senti) %>%
+  dplyr::select(status_id,text,processed,sentiment,trade_senti) %>%
   filter(sentiment %in% c(-1,0,1))
 
 # Remove @ values & whitespace (extra step for new preprocessing pipeline)
 manual.df$processed <- str_replace_all(manual.df$processed,"@[a-z,A-Z]*","")  
 manual.df$processed <- sapply(manual.df$processed, function(x) stripWhitespace(x))
+
+# remove left-overs
+manual.df$processed <- gsub(" f ", "", manual.df$processed)
+manual.df$processed <- gsub("ff", "", manual.df$processed)
+manual.df$processed <- gsub("# ", "", manual.df$processed)
 
 # Remove blank processed messages
 manual.df <- manual.df[!(is.na(manual.df$processed) | manual.df$processed %in% c(""," ")), ]
@@ -60,11 +64,21 @@ manual.df <- manual.df[!(is.na(manual.df$processed) | manual.df$processed %in% c
 ########################################################
 # Preprocessing
 
-corp <- Corpus(VectorSource(manual.df$processed))
+#corp <- Corpus(VectorSource(manual.df$processed))
+corp <- VCorpus(VectorSource(manual.df$processed))
+# Factorize sentiment target
 manual.df$sentiment <- as.factor(manual.df$sentiment)
 
-# Extract frequent terms
-frequencies <- DocumentTermMatrix(corp)
+#############################
+# Bi-gram 19.04.2018
+BigramTokenizer <- function(x){ unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)}
+
+# Tri-gram 19.04.2018
+TrigramTokenizer <- function(x){ unlist(lapply(ngrams(words(x), 3), paste, collapse = " "), use.names = FALSE)}
+#############################
+
+# Change to Bigram or Trigram
+frequencies <- DocumentTermMatrix(corp, control = list(tokenize = TrigramTokenizer))
 
 # TF-IDF weighting 09.04.2018 (lower acc)
 #frequencies <- DocumentTermMatrix(corp,
@@ -197,16 +211,40 @@ metrics <- function(cm) {
 }
 #########################################################
 # k-fold validation (5)
-train_control <- trainControl(method="cv", number=5)
+#train_control <- trainControl(method="cv", number=10)
+train_control <- trainControl(## 10-fold CV
+                              method = "repeatedcv",
+                              number = 10,
+                              ## repeated ten times
+                              repeats = 10)
+#########################################################
+# Multinomial logistic regression (baseline model)
+
+# Set the reference group for bin to be 1
+trainSparse$sentiment <- relevel(trainSparse$sentiment, ref=1)
+
+# Load the package
+library(nnet)
+# Run the model
+mlr.model <- multinom(sentiment ~ ., data=trainSparse,
+                      MaxNWts = 10000,
+                      trControl = train_control)
+
+predict.mlr <- predict(mlr.model, newdata = testSparse, type = "class")
+length(predict.mlr)
+
+cm.mlr <- table(testSparse$sentiment, predict.mlr)
+metrics(cm.mlr)
 
 ##############################################################
 # Build a CART classification regression tree model on the training set
 
-tweetCART_kfold <- train(sentiment~., data = trainSparse, model = "rpart", trControl = train_control)
+tweetCART_kfold <- train(sentiment~., data = trainSparse, 
+                         model = "rpart", trControl = train_control)
 
 predictCART_kfold <- predict(tweetCART_kfold, newdata=testSparse)
 cmCART_kfold <- table(testSparse$sentiment, predictCART_kfold)
-metrics(cmCART_kfold) # 65% / avg 76%
+metrics(cmCART_kfold) 
 
 #####################################################
 # Random Forest
@@ -216,7 +254,7 @@ predictRF <- predict(tweetRF, newdata=testSparse)
 
 cmRF <-   table(testSparse$sentiment, predictRF)
 
-metrics(cmRF) #65% / avg Acc 77%
+metrics(cmRF) 
 
 ###############################################
 # SVM
@@ -227,7 +265,7 @@ predictSVM_kfold <- predict(SVM_kfold, newdata=testSparse)
 
 cmSVM_kfold <-   table(testSparse$sentiment, predictSVM_kfold)
 
-metrics(cmSVM_kfold) #65% / avg Acc 76%
+metrics(cmSVM_kfold)
 
 #############################################################
 # Naive Bayes
@@ -238,7 +276,7 @@ predictionsNB <- predict(NBayes, as.data.frame(testSparse))
 
 cmNB <- table(testSparse$sentiment, predictionsNB)
 
-metrics(cmNB) #65% / avg Acc 76%
+metrics(cmNB) 
 
 ###############################################
 
@@ -266,7 +304,7 @@ predictionsGBM <- as.data.frame(h2o.predict(gbm.model,testH2O))
 
 cmGBM <-   table(testSparse$sentiment, predictionsGBM$predict)
 
-metrics(cmGBM) #62% / avg acc 74%
+metrics(cmGBM) 
 
 ###################################################################
 # H2O DRF
@@ -287,7 +325,7 @@ print(model_path)
 predictionsDRF <- as.data.frame(h2o.predict(h2o_drf,testH2O))
 cmDRF <- table(testSparse$sentiment, predictionsDRF$predict)
 
-metrics(cmDRF) #69% / avg acc 79%
+metrics(cmDRF) 
 
 #####################################
 #BingLiu Lexicon
@@ -343,7 +381,7 @@ result <- mutate(result, status_id, sentiment = ifelse(result$score > 0, 'Positi
                                                 ifelse(result$score < 0, 'Negative', 'Neutral')))
 
 cmBL <- table(manual.df$sentiment,result$sentiment)
-metrics(cmBL) # 53% / avg acc 69%
+metrics(cmBL) 
 
 ######################################
 # Syuzhet package
@@ -412,6 +450,6 @@ for (i in 1:nrow(finaldf)){
 
 cmMAJOR <- table(finaldf$Sentiment, finaldf$Major)
 
-metrics(cmMAJOR) # 66% / avg acc 77%
+metrics(cmMAJOR) 
 
-save.image('./Models/Senti_Manual_Dataset.RData')
+#save.image('./Models/Senti_Manual_TriGram_2018-04-19.RData')
