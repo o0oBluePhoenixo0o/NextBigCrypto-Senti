@@ -77,8 +77,11 @@ BigramTokenizer <- function(x){ unlist(lapply(ngrams(words(x), 2), paste, collap
 TrigramTokenizer <- function(x){ unlist(lapply(ngrams(words(x), 3), paste, collapse = " "), use.names = FALSE)}
 #############################
 
+# Unigram
+frequencies <- DocumentTermMatrix(corp)
+
 # Change to Bigram or Trigram
-frequencies <- DocumentTermMatrix(corp, control = list(tokenize = TrigramTokenizer))
+#frequencies <- DocumentTermMatrix(corp, control = list(tokenize = TrigramTokenizer))
 
 # TF-IDF weighting 09.04.2018 (lower acc)
 #frequencies <- DocumentTermMatrix(corp,
@@ -210,13 +213,12 @@ metrics <- function(cm) {
   return(final)
 }
 #########################################################
-# k-fold validation (5)
-#train_control <- trainControl(method="cv", number=10)
+# k-fold validation (10)
+
 train_control <- trainControl(## 10-fold CV
-                              method = "repeatedcv",
-                              number = 10,
-                              ## repeated ten times
-                              repeats = 10)
+                              method = "cv",
+                              number = 10)
+
 #########################################################
 # Multinomial logistic regression (baseline model)
 
@@ -230,11 +232,11 @@ mlr.model <- multinom(sentiment ~ ., data=trainSparse,
                       MaxNWts = 10000,
                       trControl = train_control)
 
-predict.mlr <- predict(mlr.model, newdata = testSparse, type = "class")
+predict.mlr <- predict(mlr.model, newdata = testSparse[,2:ncol(testSparse)], type = "class")
 length(predict.mlr)
 
 cm.mlr <- table(testSparse$sentiment, predict.mlr)
-metrics(cm.mlr)
+metrics(cm.mlr) # Uni acc 58%
 
 ##############################################################
 # Build a CART classification regression tree model on the training set
@@ -242,41 +244,43 @@ metrics(cm.mlr)
 tweetCART_kfold <- train(sentiment~., data = trainSparse, 
                          model = "rpart", trControl = train_control)
 
-predictCART_kfold <- predict(tweetCART_kfold, newdata=testSparse)
+predictCART_kfold <- predict(tweetCART_kfold, newdata = testSparse[,2:ncol(testSparse)])
 cmCART_kfold <- table(testSparse$sentiment, predictCART_kfold)
-metrics(cmCART_kfold) 
+metrics(cmCART_kfold) # Uni acc 62%
 
 #####################################################
 # Random Forest
 tweetRF <- train(sentiment ~ ., data=trainSparse, model = "rf", trControl = train_control)
 
-predictRF <- predict(tweetRF, newdata=testSparse)
+predictRF <- predict(tweetRF, newdata = testSparse[,2:ncol(testSparse)])
 
 cmRF <-   table(testSparse$sentiment, predictRF)
 
-metrics(cmRF) 
+metrics(cmRF) # Uni - acc 62%
 
 ###############################################
 # SVM
 
 SVM_kfold <-  train(sentiment ~ ., data=trainSparse, model = "svm", trControl=train_control)
 
-predictSVM_kfold <- predict(SVM_kfold, newdata=testSparse)
+predictSVM_kfold <- predict(SVM_kfold, newdata = testSparse[,2:ncol(testSparse)])
 
 cmSVM_kfold <-   table(testSparse$sentiment, predictSVM_kfold)
 
-metrics(cmSVM_kfold)
+metrics(cmSVM_kfold) # Uni acc 63%
 
 #############################################################
 # Naive Bayes
 
 NBayes <- train(sentiment ~., data = trainSparse, laplace = 3, model = "nb", trControl = train_control)
 
-predictionsNB <- predict(NBayes, as.data.frame(testSparse))
+predictionsNB <- predict(NBayes,  newdata = testSparse[,2:ncol(testSparse)])
 
 cmNB <- table(testSparse$sentiment, predictionsNB)
 
-metrics(cmNB) 
+metrics(cmNB) # Uni - acc 63%
+
+###############################################
 
 ###############################################
 
@@ -286,11 +290,11 @@ h2o.init()
 # Build a training and testing set for H2O environment
 
 trainH2O <- as.h2o(trainSparse)
-testH2O <- as.h2o(testSparse)
+testH2O <- as.h2o(testSparse[,2:ncol(testSparse)])
 
 # Train GBM model
 gbm.model <- h2o.gbm(  training_frame = trainH2O,
-                       validation_frame = testH2O,
+                       #validation_frame = testH2O,
                        x=2:ncol(trainSparse),            
                        y=1,         
                        ntrees = 500, 
@@ -298,20 +302,21 @@ gbm.model <- h2o.gbm(  training_frame = trainH2O,
                        learn_rate = 0.3, 
                        nfolds = 10,
                        seed = 1234)
+
 model_path <- h2o.saveModel(object=gbm.model, path=getwd(), force=TRUE)
 print(model_path)
 predictionsGBM <- as.data.frame(h2o.predict(gbm.model,testH2O))
 
 cmGBM <-   table(testSparse$sentiment, predictionsGBM$predict)
 
-metrics(cmGBM) 
+metrics(cmGBM) # Uni - acc 60%
 
 ###################################################################
 # H2O DRF
 
 h2o_drf <- h2o.randomForest(    
   training_frame = trainH2O,
-  validation_frame = testH2O,
+  #validation_frame = testH2O,
   x=2:ncol(trainSparse),            
   y=1,                          
   ntrees = 500,                 # Increase max trees to 500 
@@ -325,9 +330,13 @@ print(model_path)
 predictionsDRF <- as.data.frame(h2o.predict(h2o_drf,testH2O))
 cmDRF <- table(testSparse$sentiment, predictionsDRF$predict)
 
-metrics(cmDRF) 
+metrics(cmDRF) # Uni - acc 63%
 
-#####################################
+####################
+#                  #
+#  PACKAGES MODEL  #
+#                  #
+####################
 #BingLiu Lexicon
 
 #Pulling in positive and negative wordlists
@@ -335,11 +344,12 @@ metrics(cmDRF)
 pos.words <- scan('./0. Datasets/positive-words.txt', what='character', comment.char=';') #folder with positive dictionary
 neg.words <- scan('./0. Datasets/negative-words.txt', what='character', comment.char=';') #folder with negative dictionary
 #Adding words to positive and negative databases
-pos.words=c(pos.words, 'Congrats', 'prizes', 'prize', 'thanks', 'thnx', 'Grt', 
+pos.words=c(pos.words, 'Congrats', 'prizes', 'prize', 'thanks', 'thnx', 'Grt', 'thx' ,
             'gr8', 'plz', 'trending', 'recovering', 'brainstorm', 'leader','pump',
             'rocket','ath','bullish','bull')
 neg.words = c(neg.words, 'Fight', 'fighting', 'wtf', 'arrest', 'no', 'not',
-              'FUD','FOMO','bearish','dump','fear','atl')
+              'FUD','FOMO','bearish','dump','fear','atl','bear','wth','shit','fuck','dumb',
+              'weakhands','blood','bloody','scam','con-artist','liar','vaporware','shitfork')
 
 #evaluation function
 score.sentiment <- function(sentences, pos.words, neg.words, .progress='none')
@@ -377,11 +387,11 @@ result <- scores
 #Add ID to result set
 result$status_id <- manual.df$status_id
 #add new scores as a column
-result <- mutate(result, status_id, sentiment = ifelse(result$score > 0, 'Positive', 
-                                                ifelse(result$score < 0, 'Negative', 'Neutral')))
+result <- mutate(result, status_id, sentiment = ifelse(result$score > 0, 1, 
+                                                ifelse(result$score < 0, -1, 0)))
 
 cmBL <- table(manual.df$sentiment,result$sentiment)
-metrics(cmBL) 
+metrics(cmBL) # acc 57%
 
 ######################################
 # Syuzhet package
@@ -396,7 +406,37 @@ test.syuzhet$sent <- as.factor(test.syuzhet$sent)
 
 #confusionMatrix(manual.df$sentiment, test.syuzhet$sent)
 cm_nrc <- table(manual.df$sentiment, test.syuzhet$sent)
-metrics(cm_nrc)
+metrics(cm_nrc) # acc 47%
+
+######################################
+# Syuzhet
+test.syuzhet2 <- syuzhet::get_sentiment(as.character(manual.df$processed))
+
+test.syuzhet2 <- as.data.frame(test.syuzhet2)
+
+test.syuzhet2$sent <- ifelse(test.syuzhet2$test.syuzhet2 < 0,-1,
+                             ifelse(test.syuzhet2$test.syuzhet2 == 0 ,0,1))
+
+test.syuzhet2$sent <- as.factor(test.syuzhet2$sent)
+
+#confusionMatrix(manual.df$sentiment, test.syuzhet2$sent)
+cm_syuzhet <- table(manual.df$sentiment, test.syuzhet2$sent)
+metrics(cm_syuzhet) # acc 53%
+
+######################################
+# Syuzhet
+test.syuzhet3 <- syuzhet::get_sentiment(as.character(manual.df$processed), method = "afinn")
+
+test.syuzhet3 <- as.data.frame(test.syuzhet3)
+
+test.syuzhet3$sent <- ifelse(test.syuzhet3$test.syuzhet3 < 0,-1,
+                             ifelse(test.syuzhet3$test.syuzhet3 == 0 ,0,1))
+
+test.syuzhet3$sent <- as.factor(test.syuzhet3$sent)
+
+#confusionMatrix(manual.df$sentiment, test.syuzhet3$sent)
+cm_afinn <- table(manual.df$sentiment, test.syuzhet3$sent)
+metrics(cm_afinn) # acc 55%
 
 ######################################
 # SentimentR
@@ -409,27 +449,22 @@ test.sentimentR$sent <- as.factor(test.sentimentR$sent)
 
 confusionMatrix(manual.df$sentiment, test.sentimentR$sent)
 cm_sentimentr <- table(manual.df$sentiment, test.sentimentR$sent)
-metrics(cm_sentimentr)
+metrics(cm_sentimentr) # acc 51%
 
-################################################################################
-#######################################################################################################
-# MAJORITY VOTING #
+#########################################################
+# MAJORITY VOTING (packages)
 
-finaldf <- cbind(testSparse$sentiment,
-                 as.data.frame(predictRF), #Random Forest
-                 as.data.frame(predictCART_kfold), #Classification and Regression Trees
-                 as.data.frame(predictSVM_kfold), #Support Vector Machine
-                 predictionsDRF$predict, # Distributed Random Forest
-                 predictionsGBM$predict, #Gradient Boosting Machine
-                 as.data.frame(predictionsNB)) #Naive Bayes
-                 # result$sentiment, #BingLiu
-                 # test.syuzhet$sent, #Syuzhet package
-                 # test.sentimentR$sent) #sentimentR package
+major.packages <- as.data.frame(as.factor(manual.df$sentiment))
+major.packages <- cbind(major.packages,       # target variable
+                        as.factor(result$sentiment),     # Bing Liu lexicon
+                        as.factor(test.syuzhet$sent),    # NRC lexicon
+                        as.factor(test.syuzhet2$sent),   # Syuzhet
+                        as.factor(test.syuzhet3$sent),   # AFINN lexicon
+                        as.factor(test.sentimentR$sent)) # Sentiment R
 
-#colnames(finaldf) <- c("Sentiment","RF","CART","SVM","DRF","GBM","NB","BingLiu","Syuzhet_NRC","SentimentR")
-colnames(finaldf) <- c("Sentiment","RF","CART","SVM","DRF","GBM","NB")
+colnames(major.packages) <- c("Sentiment","BingLiu","NRC","Syuzhet","AFINN","SentimentR")
 
-#The majority vote
+# The majority vote
 find_major <- function(df,x){
   a <- df[x,]
   neg <- 0
@@ -444,12 +479,36 @@ find_major <- function(df,x){
   result <- c("Positive", "Negative", "Neutral")[which.max(c(pos,neg,neu))]
 }
 
+# Calculating majority votes
+for (i in 1:nrow(major.packages)){
+  major.packages$Major[i] <- find_major(major.packages,i)
+}
+
+cmMAJOR.packages <- table(major.packages$Sentiment, major.packages$Major)
+
+metrics(cmMAJOR.packages) # acc 52%
+
+#########################################################
+# MAJORITY VOTING (trained models)
+
+finaldf <- cbind(testSparse$sentiment,
+                 as.data.frame(predictRF),         # Random Forest
+                 as.data.frame(predictCART_kfold), # Classification and Regression Trees
+                 as.data.frame(predictSVM_kfold),  # Support Vector Machine
+                 predictionsDRF$predict,           # Distributed Random Forest
+                 predictionsGBM$predict,           # Gradient Boosting Machine
+                 as.data.frame(predictionsNB))     # Naive Bayes
+
+#colnames(finaldf) <- c("Sentiment","RF","CART","SVM","DRF","GBM","NB","BingLiu","Syuzhet_NRC","SentimentR")
+colnames(finaldf) <- c("Sentiment","RF","CART","SVM","DRF","GBM","NB")
+
+# Calculating majority votes
 for (i in 1:nrow(finaldf)){
   finaldf$Major[i] <- find_major(finaldf,i)
 }
 
 cmMAJOR <- table(finaldf$Sentiment, finaldf$Major)
 
-metrics(cmMAJOR) 
+metrics(cmMAJOR) # Uni - acc 62%
 
-#save.image('./Models/Senti_Manual_TriGram_2018-04-19.RData')
+#save.image('./Models/Senti_Manual_UniGram_2018-04-24.RData')

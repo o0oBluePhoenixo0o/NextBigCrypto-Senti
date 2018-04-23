@@ -42,7 +42,7 @@ start_date <- as.Date('2017-09-30')
 ##########################
 # load price dataset
 
-price.df <- read_csv("./1. Crawlers/Crypto-Markets_2018-04-16.csv") %>%
+price.df <- read_csv("./1. Crawlers/Crypto-Markets_2018-04-22.csv") %>%
   filter(symbol == token_name & date >= start_date)
 
 price.df <- price.df[c('date','close')]
@@ -57,8 +57,8 @@ for (i in 2:nrow(price.df)){
 ############
 # Exploratory
 dat <- as.data.frame(price.df$pricediff)
-dat <- cbind(price.df$date,dat)
-colnames(dat) <- c('date', 'pricediff')
+dat <- cbind(price.df$date,dat, price.df$close)
+colnames(dat) <- c('date', 'pricediff','close')
 
 # Histogram overlaid with kernel density curve
 # ggplot(dat, aes(x=pricediff)) + 
@@ -78,22 +78,55 @@ ggplot(dat , aes(x=pricediff)) +
   geom_rug() +
   labs(x='Differences between close prices')
 
-###############################
+###########
+# BINNING #
+###########
+
+hist(dat$pricediff)
+
+dat$diff <- NA
+for (i in 2:nrow(dat)){
+  dat$diff[i] <- round(((dat$close[i]-dat$close[i-1])/dat$close[i])*100,2)
+}
 
 # Split into 4 different bins: strong up/ up / down / strong down
-dat$bin <- as.numeric(cut2(dat$pricediff, g=4))
+# dat$bin <- as.numeric(cut2(dat$pricediff, g=4))
+
+# < 5% is normal >=5% is "strong"
+
+hist(dat$diff, xlab = 'Percent differences between close prices',
+     main = 'Histogram of percentage differences between $BTC close prices')
+
+# Binning process
+for (i in 2:nrow(dat)){
+  dat$bin[i] <- ifelse(dat$diff[i] < -5,'strong down',
+                       ifelse(dat$diff[i] < 0 & dat$diff[i] >= -5,'down',
+                              ifelse(dat$diff[i] > 0 & dat$diff[i] <= 5,'up','strong up')))
+}
+
 
 # check distribution
 dat %>% group_by(bin) %>% tally
+dat <- dat[complete.cases(dat),]
 
 ###############################
 # Preparation
-price.df$cut <- as.numeric(cut2(price.df$pricediff, g=4))
 
-# Assigning bin
-price.df$bin <- ifelse(price.df$cut == 1,'strong down',
-                       ifelse(price.df$cut == 2,'down',
-                              ifelse(price.df$cut ==3,'up','strong up')))
+price.df$diff <- NA
+price.df$bin <- NA
+
+# Assigning bin to main dataframe
+for (i in 2:nrow(price.df)){
+  price.df$diff[i] <- round(((price.df$close[i]-price.df$close[i-1])/price.df$close[i])*100,2)
+}
+
+# Binning process
+for (i in 2:nrow(price.df)){
+  price.df$bin[i] <- ifelse(price.df$diff[i] < -5,'strong down',
+                       ifelse(price.df$diff[i] < 0 & price.df$diff[i] >= -5,'down',
+                              ifelse(price.df$diff[i] > 0 & price.df$diff[i] <= 5,'up','strong up')))
+}
+price.df <- price.df[complete.cases(price.df),]
 
 price.df$t_1 <- NA # price movement on day t-1
 price.df$t_2 <- NA # price movement on day t-2
@@ -102,6 +135,13 @@ price.df$t_4 <- NA # price movement on day t-4
 price.df$t_5 <- NA # price movement on day t-5
 price.df$t_6 <- NA # price movement on day t-6
 price.df$t_7 <- NA # price movement on day t-7
+price.df$t_8 <- NA # price movement on day t-8
+price.df$t_9 <- NA # price movement on day t-9
+price.df$t_10 <- NA # price movement on day t-10
+price.df$t_11 <- NA # price movement on day t-11
+price.df$t_12 <- NA # price movement on day t-12
+price.df$t_13 <- NA # price movement on day t-13
+price.df$t_14 <- NA # price movement on day t-14
 
 
 for (i in 1:nrow(price.df)){
@@ -119,6 +159,20 @@ for (i in 1:nrow(price.df)){
   price.df$t_6[i] <- price.df$bin[i-6]
   if (i==7){next}
   price.df$t_7[i] <- price.df$bin[i-7]
+  if (i==8){next}
+  price.df$t_8[i] <- price.df$bin[i-8]
+  if (i==9){next}
+  price.df$t_9[i] <- price.df$bin[i-9]
+  if (i==10){next}
+  price.df$t_10[i] <- price.df$bin[i-10]
+  if (i==11){next}
+  price.df$t_11[i] <- price.df$bin[i-11]
+  if (i==12){next}
+  price.df$t_12[i] <- price.df$bin[i-12]
+  if (i==13){next}
+  price.df$t_13[i] <- price.df$bin[i-13]
+  if (i==14){next}
+  price.df$t_14[i] <- price.df$bin[i-14]
 }
 
 # Convert to categorical variables
@@ -129,17 +183,35 @@ price.df$t_4 <- as.factor(price.df$t_4)
 price.df$t_5 <- as.factor(price.df$t_5)
 price.df$t_6 <- as.factor(price.df$t_6)
 price.df$t_7<- as.factor(price.df$t_7)
+price.df$t_8<- as.factor(price.df$t_8)
+price.df$t_9<- as.factor(price.df$t_9)
+price.df$t_10<- as.factor(price.df$t_10)
+price.df$t_11<- as.factor(price.df$t_11)
+price.df$t_12<- as.factor(price.df$t_12)
+price.df$t_13<- as.factor(price.df$t_13)
+price.df$t_14<- as.factor(price.df$t_14)
 
 # Build a training and testing set.
 set.seed(1908)
 
-main.df <- price.df[c('bin','t_1','t_2','t_3','t_4','t_5','t_6','t_7')]
+main.df <- price.df[c('date','bin','t_1','t_2','t_3','t_4','t_5',
+                      't_6','t_7','t_8','t_9','t_10',
+                      't_11','t_12','t_13','t_14')]
 
-split <- sample.split(main.df$bin, SplitRatio=0.8) #bin is target variable
-train <- subset(main.df, split==TRUE)
-test <- subset(main.df, split==FALSE)
+# Split random
+
+# split <- sample.split(main.df$bin, SplitRatio=0.8) #bin is target variable
+# train <- subset(main.df, split==TRUE)
+# test <- subset(main.df, split==FALSE)
 # delete 1st row of test data
-test <- test[-1,]
+# test <- test[-1,]
+
+# Split according to timeline
+train <- main.df %>% filter(date <= '2018-02-28')
+train <- train[,-1]
+
+test <- main.df %>% filter(date > '2018-02-28')
+test <- test[,-1]
 
 ##########################################################################################################
 # Function to calculate accuracy/prediction/recall
@@ -248,12 +320,9 @@ metrics <- function(cm) {
 }
 ##############################
 # k-fold validation (10)
-#train_control <- trainControl(method="cv", number=10)
 train_control <- trainControl(## 10-fold CV
-                              method = "repeatedcv",
-                              number = 10,
-                              ## repeated ten times
-                              repeats = 10)
+                              method = "cv",
+                              number = 10)
 #################################
 # Base-line model 
 library(MASS)
@@ -263,7 +332,10 @@ library(MASS)
 train$bin <- factor(train$bin)
 
 # Run the ordinal logistic regression model
-model <- polr(bin ~ ., data=train)
+model <- polr(bin ~ ., 
+              data=train,
+              na.action = na.exclude)
+
 summary(model)
 coefs <- coef(model)
 # Display coefficients
@@ -271,10 +343,14 @@ coefs
 # Raise e to the coefficients
 exp(coefs)
 
-# Load the library
-library(brant)
-# Run the Brant test on the model
-brant(model) #Omnibus prob < 0.05 ==> ordinal logistic regression fails
+# Predict
+predict.olr <- predict(model, newdata=test[,2:ncol(test)])
+length(predict.olr)
+predict.olr
+
+# Confusion Matrix OLR
+cm.olr <- table(test$bin, predict.olr)
+metrics(cm.olr) # acc 35% but something wrong: no class of "strong up"
 
 ################################################
 # Multinomial logistic regression
@@ -301,47 +377,83 @@ coefs <- coef(mlr.model)
 # # Do the full transformation, all in one line
 # (exp(coefs)-1)*100
 
-# Prediction
-predict.mlr <- predict(mlr.model, newdata = test, type = "raw")
+# Prediction 
+predict.mlr <- predict(mlr.model, newdata=test[,2:ncol(test)], type = "raw", na.action = na.omit)
 
+length(predict.mlr)
 # Confusion Matrix
-cm.mlr <- table(test$bin,predict.mlr)
-
-metrics(cm.mlr) # acc 31%
+cm.mlr <- table(test$bin, predict.mlr)
+metrics(cm.mlr) # acc 33%
 
 ########################################
 # Naive Bayes
 
-NBayes <- train(bin ~., data = train, 
-                laplace = 1, model = "nb",
+NBayes <- train(bin ~., 
+                data = train, 
+                laplace = 1, 
+                model = "nb",
                 na.action = na.exclude,
                 trControl = train_control)
 
-predictionsNB <- predict(NBayes, newdata=test)
-
+predictionsNB <- predict(NBayes, newdata = test[,2:ncol(test)])
 cmNB <- table(test$bin, predictionsNB)
 
-metrics(cmNB) # acc 28%
+metrics(cmNB) # acc 37%
 
 # Recursive feature elimination (via caret package)
 set.seed(1908)
 
 ctrl <- rfeControl(functions = nbFuncs, #naive bayes
-                   method = "repeatedcv",
-                   repeats = 10,
+                   method = "cv",
+                   number = 10,
                    verbose = FALSE)
-?rfe
 
-lmProfile <- rfe(bin ~ ., # formula 
-                 train, 
-                 sizes = 1:5, #retain from 1-4 features
+# convert dependent variables to factor vector
+y <- train[,1]
+y <- as.vector(unlist(y))
+y <- as.factor(y)
+
+# apply rfe
+nbProfile <- rfe(x = train[,2:ncol(train)], # features
+                 y,
+                 sizes = 1:8,   # retain from 1-8 features
                  rfeControl =  ctrl)
 
-lmProfile
-predictors(lmProfile)
+# summary of rfe
+nbProfile
+# get predictors
+predictors(nbProfile)
 
-lmProfile$fit
-head(lmProfile$resample)
+nbProfile$fit
+head(nbProfile$resample)
 
+# Ploting rfe progress
 trellis.par.set(caretTheme())
-plot(lmProfile, type = c("g", "o")) # improve 5$ accuracy
+plot(nbProfile, type = c("g", "o"), main = 'RFE for Naive Bayes')
+
+########################################
+# Route 1
+## Apply new predictors to NBayes
+newNB_rfe <- predict(nbProfile, test[,2:ncol(test)])
+newNB_rfe
+
+cmNB_rfe1 <- table(test$bin,newNB_rfe$pred)
+metrics(cmNB_rfe1) # acc up to 46%
+
+# Route 2
+## Apply new predictors to modeling
+nbProfile$optVariables
+f <- as.formula(paste("bin", paste(nbProfile$optVariables, collapse=" + "), sep=" ~ "))
+
+set.seed(1908)
+NBayes_rfe <- train(f,
+                    data = train,
+                    laplace = 1, model = "nb",
+                    na.action = na.exclude,
+                    trControl = train_control)
+
+predictionsNB_rfe <- predict(NBayes_rfe, newdata=test[,2:ncol(test)])
+
+cmNB_rfe2 <- table(test$bin, predictionsNB_rfe)
+
+metrics(cmNB_rfe2) # acc 46%
