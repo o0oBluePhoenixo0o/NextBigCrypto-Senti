@@ -41,7 +41,14 @@ name.df <- 'BTC'
 
 #########################################################################
 
+df <- df[,which(colnames(df) %in% c('screen_name','user_id','created_at','text','status_id'))] %>%
+  mutate(timestamp = ymd_hms(created_at))
 
+######################
+#
+# FUNCTIONS CREATION
+#
+######################
 
 # IMPORTANT - For converting non-Unicode character from csv file (took 1 month to recognize)
 trueunicode.hack <- function(string){
@@ -81,72 +88,82 @@ trueunicode.hack <- function(string){
   y
 }
 
-df <- df[,which(colnames(df) %in% c('created_at','text','status_id'))] %>%
-  mutate(timestamp = ymd_hms(created_at))
+conv_fun <- function(x) iconv(x, "latin1", "ASCII", "") # delete "byte" ==> delete emoticons unicode
 
-# Convert unicode
-df$text <- sapply(df$text,function(x) trueunicode.hack(x))
-
-# remove duplicates base on tweets
-df <- df[!duplicated(df$text),]
-
-##################################################
-# Preprocessing steps
-conv_fun <- function(x) iconv(x, "latin1", "ASCII", "") #delete "byte" ==> delete emoticons unicode
-removeURL <- function(x) gsub('"(http.*) |(https.*) |(http.*)$|\n', "", x)
+# Remove URL now is performed by qdapRegex 25.04.2018
+# removeURL <- function(x) gsub('"(http.*) |(https.*) |(http.*)$|\n', "", x)
+removeURL <- function(x) rm_url(x, pattern=pastex("@rm_twitter_url", "@rm_url"))
 
 # Function to replace ' and " to spaces before removing punctuation 
 # to avoid different words from binding 
 AposToSpace = function(x){
   x= gsub("'", ' ', x)
   x= gsub('"', ' ', x)
-  x =gsub('break','broke',x) # break may interrupt control flow in few functions
   return(x)
 }
 
-###
-# Convert unicode
-df$text <- sapply(df$text,function(x) trueunicode.hack(x))
+###################################################################
 
-# remove duplicates base on tweets
-df <- df[!duplicated(df$text),]
-
-###
-df$processed <- sapply(df$text, function(x) trueunicode.hack(x))
-df$processed <- sapply(df$processed, function(x) conv_fun(x)) # convert to delete emojis
-df$processed <- sapply(df$processed, function(x) removeURL(x)) # remove URL
-
-# will remove stopwords later in dtm step
-df$processed <- sapply(df$processed, function(x) removeWords(x,stopwords("english"))) 
-
-# Get rid of references to other screennames
-df$processed <- str_replace_all(df$processed,"@[a-z,A-Z]*","")  
-
-# remove punctuations except for # $ 
-df$processed <- sapply(df$processed, function(x) gsub( "[^#$a-zA-Z\\s]" , "" , x , perl = TRUE ))
-
-# Apply functions
-df$processed <- sapply(df$processed, function(x) AposToSpace(x)) 
-df$processed <- sapply(df$processed, function(x) stripWhitespace(x))
-
-# remove whitespace before & after
-df$processed <- sapply(df$processed, function(x) gsub("^[[:space:]]+", "",x))
-df$processed  <- sapply(df$processed, function(x) gsub("[[:space:]]+$", "",x))
-
-#test with removing number 02.03.2018
-df$processed <- sapply(df$processed, function(x) removeNumbers(x))
-# To lower case
-df$processed <- tolower(df$processed)
-
-# Remove duplicates (after rmv url)
-df <- df[!duplicated(df$processed),]
-# Remove blanks
-df <- df[!(is.na(df$processed) | df$processed==""), ]
-# Remove <f0>
-df$processed <- gsub("<f0>", "", df$processed)
-df$status_id <- as.character(df$status_id)
-
-
+Cleandata <- function(df) {
+  
+  df$status_id <- as.character(df$status_id)
+  
+  # Convert unicode
+  df$text <- sapply(df$text,function(x) trueunicode.hack(x))
+  
+  # remove duplicates base on tweets
+  df <- df[!duplicated(df$text),]
+  
+  ###
+  df$processed <- df$text
+  df$processed <- sapply(df$processed, function(x) conv_fun(x)) # convert to delete emojis
+  df$processed <- sapply(df$processed, function(x) removeURL(x)) # remove URL
+  df$processed <- sapply(df$processed, function(x) gsub("[\r\n]", " ", x)) #change /r /n break lines into space
+  # To lower case
+  df$processed <- sapply(df$processed, function(x) tolower(x))
+  
+  # remove stopwords - create exception lists 25.04
+  exceptions   <- c('up','down','all','above','below','under','over',
+                    'few','more', 'in')
+  # keep negation list
+  negations <- grep(pattern = "not|n't", x = stopwords(), value = TRUE)
+  exceptions <- c(exceptions,negations)
+  
+  my_stopwords <- setdiff(stopwords("en"), exceptions)
+  
+  df$processed <- sapply(df$processed, function(x) removeWords(x,c(my_stopwords))) 
+  
+  ###########################################
+  
+  # Get rid of references to other screennames
+  df$processed <- str_replace_all(df$processed,"@[a-z,A-Z]*","")  
+  
+  # remove punctuations except for # $ 
+  df$processed <- sapply(df$processed, function(x) gsub( "[^#$a-zA-Z\\s]" , "" , x , perl = TRUE ))
+  
+  # Apply Apos to space
+  df$processed <- sapply(df$processed, function(x) AposToSpace(x)) 
+  
+  # removing number 02.03.18
+  df$processed <- sapply(df$processed, function(x) removeNumbers(x))
+  
+  # Remove left-overs
+  df$processed <- sapply(df$processed, function(x) gsub("ff", " ",x))
+  df$processed <- sapply(df$processed, function(x) gsub("# ", " ", x))
+  df$processed <- sapply(df$processed, function(x) gsub(" f ", " ", x))
+  
+  # remove whitespace before & after
+  df$processed <- sapply(df$processed, function(x) gsub("^[[:space:]]+", "",x))
+  df$processed  <- sapply(df$processed, function(x) gsub("[[:space:]]+$", "",x))
+  df$processed <- sapply(df$processed, function(x) stripWhitespace(x))
+  
+  # Remove blank processed messages
+  df <- df[!(is.na(df$processed) | df$processed %in% c(""," ")), ]
+  
+  # Final remove duplicates (after rmv url)
+  df <- df[!duplicated(df$processed),]
+  return(df)
+}
 ###################################################################
 
 #backup

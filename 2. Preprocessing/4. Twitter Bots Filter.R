@@ -63,7 +63,7 @@ setwd("~/GitHub/NextBigCrypto-Senti/Models")
 # Determine whether a Twitter ID is a bot or not (probability - gradient boosting machine)
 j <- 0 #counter
 
-for (i in 56699:nrow(final.user_list)){
+for (i in 113055:nrow(final.user_list)){
   if (is.na(final.user_list$botprob[i]) == FALSE) { 
     print(paste0('Already analyzed user ',final.user_list$screen_name[i],' at position: ',i))
     next}
@@ -85,10 +85,9 @@ for (i in 56699:nrow(final.user_list)){
   
 }
 
-
 # Save final user list
 write.xlsx(final.user_list,paste0('Twitter_Bot_Users_(Final).xlsx'))
-save.image(paste0('Twitter_Bot_Final_',Sys.Date(),'.RData'))i
+save.image(paste0('Twitter_Bot_Final_',Sys.Date(),'.RData'))
 
 # setwd("~/GitHub/NextBigCrypto-Senti")
 # final.user_list <- read.xlsx('./Models/Twitter_Bot_Users_(Working).xlsx')
