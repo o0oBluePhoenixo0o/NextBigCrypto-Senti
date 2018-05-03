@@ -20,7 +20,8 @@ packages <- c("readr", #read data
               "Hmisc", #binning
               "tidyquant",
               "memisc", # case-when function
-              "caTools","caret", "rpart", "h2o","e1071","RWeka","randomForest") # machine learning packages
+              "caTools","caret", "rpart", "h2o","e1071","RWeka",
+              "randomForest","klaR") # machine learning packages
 
 if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
   install.packages(setdiff(packages, rownames(installed.packages())))
@@ -42,7 +43,7 @@ start_date <- as.Date('2017-09-30')
 ##########################
 # load price dataset
 
-price.df <- read_csv("./1. Crawlers/Crypto-Markets_2018-04-22.csv") %>%
+price.df <- read_csv("./1. Crawlers/Crypto-Markets_2018-04-30.csv") %>%
   filter(symbol == token_name & date >= start_date)
 
 price.df <- price.df[c('date','close')]

@@ -3,6 +3,8 @@
 # 19.04.18 - Bigram test
 # 22.04.18 - Trigram + revisit unigram
 # 25.04.18 - New preprocessing pipeline v2
+# 29.04.18 - Test stopwords v2 with token additions --> v1 is better
+# 30.04.18 - Abbreviation conversion for Unigram + Lemmatization + Stopwords v1
 
 # clear the environment
 rm(list= ls())
@@ -34,57 +36,24 @@ if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
 }
 lapply(packages, require, character.only = TRUE)
 
-# if use openxlsx
-# ZIP PATH for dev tools
-if(devtools::find_rtools()) Sys.setenv(R_ZIPCMD= file.path(devtools:::get_rtools_path(),"zip"))
-library(openxlsx)
-
 ########################################################
-
-# manual.df %>% group_by(sentiment) %>%tally # overall observation
-
-# Positive	1056
-# Neutral	1256
-# Negative	356
-
 # Read the manual dataset (current ~2700 available messages)
 # manual.df <- read.xlsx('Manual_Dataset_1004_labeling.xlsx') %>%
 #   dplyr::select(status_id,text,processed,sentiment,trade_senti) %>%
 #   filter(sentiment %in% c(-1,0,1))
 
-manual.df <- read_csv('Manual_Dataset_2504.csv') %>%
-  dplyr::select(status_id,text,processed,sentiment,trade_senti) %>%
+manual.df <- read_csv('Manual_Dataset_0105.csv') %>%
+  dplyr::select(status_id,text,processed,sentiment) %>%
   filter(sentiment %in% c(-1,0,1))
-
-# Lemmatization 26.04.18
-manual.df$processed <- sapply(manual.df$processed, function(x) textstem::lemmatize_strings(x))
 
 manual.df$status_id <- as.character(manual.df$status_id)
 
-########################################################
-# Extra remove stopwords (list of tokens) 29.04.18
+manual.df %>% group_by(sentiment) %>%tally # overall observation
 
-# remove stopwords - create exception lists 25.04
-exceptions   <- c('up','down','all','above','below','under','over',
-                  'few','more', 'in')
-# keep negation list
-negations <- grep(pattern = "not|n't", x = stopwords(), value = TRUE)
-
-# binding all exception lists
-exceptions <- c(exceptions,negations)
-my_stopwords <- setdiff(stopwords("en"), exceptions)
-
-# Read tokens data
-coins_list <- read_csv("./1. Crawlers/Crypto-Markets_2018-04-22.csv")
-
-tokens <- tolower(as.vector(unique(coins_list$symbol)))
-# Add extra "$" in front of token
-tokens_extra <- paste0("$",tokens)
-tokens <- c(tokens,tokens_extra)
-
-# Combine tokens to stopword dict
-my_stopwords <- c(my_stopwords,tokens)
-manual.df$processed <- sapply(manual.df$processed, function(x) removeWords(x,c(my_stopwords))) 
+# 01.05.2018
+# Positive	1159
+# Neutral	  1432
+# Negative	393
 
 ########################################################
 # Preprocessing
@@ -127,10 +96,6 @@ set.seed(1908)
 split <- sample.split(ResultSparse$sentiment, SplitRatio=0.8)
 trainSparse <- subset(ResultSparse, split==TRUE)
 testSparse <- subset(ResultSparse, split==FALSE)
-
-# Test set for prebuilt packages
-test <- as.data.frame(subset(manual.df$processed,split==FALSE))
-colnames(test) <- 'processed'
 
 ##########################################################################################################
 # Function to calculate accuracy/prediction/recall
@@ -241,8 +206,8 @@ metrics <- function(cm) {
 # k-fold validation (10)
 
 train_control <- trainControl(## 10-fold CV
-  method = "cv",
-  number = 10)
+                              method = "cv",
+                              number = 10)
 
 #########################################################
 # Multinomial logistic regression (baseline model)
@@ -274,6 +239,16 @@ cmCART_kfold <- table(testSparse$sentiment, predictCART_kfold)
 metrics(cmCART_kfold) # Uni acc 62% -> 65%
 
 #####################################################
+# C5.0 29.04.18
+
+C5.0model <- train(sentiment~., data = trainSparse, 
+                   model = "C5.0", trControl = train_control)
+
+predict.C50 <- predict(C5.0model, newdata = testSparse[,2:ncol(testSparse)])
+cm.C50 <- table(testSparse$sentiment, predict.C50)
+metrics(cm.C50) # Uni-Lemma 66% acc
+
+#####################################################
 # Random Forest
 tweetRF <- train(sentiment ~ ., data=trainSparse, model = "rf", trControl = train_control)
 
@@ -297,7 +272,7 @@ metrics(cmSVM_kfold) # Uni acc 63%
 #############################################################
 # Naive Bayes
 
-NBayes <- train(sentiment ~., data = trainSparse, laplace = 3, model = "nb", trControl = train_control)
+NBayes <- train(sentiment ~., data = trainSparse, laplace = 1, model = "nb", trControl = train_control)
 
 predictionsNB <- predict(NBayes,  newdata = testSparse[,2:ncol(testSparse)])
 
@@ -306,9 +281,6 @@ cmNB <- table(testSparse$sentiment, predictionsNB)
 metrics(cmNB) # Uni - acc 63%
 
 ###############################################
-
-###############################################
-
 # H2O GBM
 h2o.init()
 
@@ -357,6 +329,32 @@ cmDRF <- table(testSparse$sentiment, predictionsDRF$predict)
 
 metrics(cmDRF) # Uni - acc 63%
 h2o.shutdown()
+
+#########################################################
+# MAJORITY VOTING (trained models)
+
+finaldf <- cbind(testSparse$sentiment,
+                 as.data.frame(predictRF),         # Random Forest
+                 as.data.frame(predictCART_kfold), # Classification and Regression Trees
+                 as.data.frame(predictSVM_kfold),  # Support Vector Machine
+                 predictionsDRF$predict,           # Distributed Random Forest
+                 predictionsGBM$predict,           # Gradient Boosting Machine
+                 as.data.frame(predictionsNB),     # Naive Bayes
+                 as.data.frame(predict.C50))       # C5.0 Tree
+
+#colnames(finaldf) <- c("Sentiment","RF","CART","SVM","DRF","GBM","NB","BingLiu","Syuzhet_NRC","SentimentR")
+colnames(finaldf) <- c("Sentiment","RF","CART","SVM","DRF","GBM","NB","C.50")
+
+# Calculating majority votes
+for (i in 1:nrow(finaldf)){
+  finaldf$Major[i] <- find_major(finaldf,i)
+}
+
+cmMAJOR <- table(finaldf$Sentiment, finaldf$Major)
+
+metrics(cmMAJOR) # Uni - acc 62%
+
+############################################################################################################
 ####################
 #                  #
 #  PACKAGES MODEL  #
@@ -513,677 +511,15 @@ cmMAJOR.packages <- table(major.packages$Sentiment, major.packages$Major)
 
 metrics(cmMAJOR.packages) # acc 52%
 
-#########################################################
-# MAJORITY VOTING (trained models)
-
-finaldf <- cbind(testSparse$sentiment,
-                 as.data.frame(predictRF),         # Random Forest
-                 as.data.frame(predictCART_kfold), # Classification and Regression Trees
-                 as.data.frame(predictSVM_kfold),  # Support Vector Machine
-                 predictionsDRF$predict,           # Distributed Random Forest
-                 predictionsGBM$predict,           # Gradient Boosting Machine
-                 as.data.frame(predictionsNB))     # Naive Bayes
-
-#colnames(finaldf) <- c("Sentiment","RF","CART","SVM","DRF","GBM","NB","BingLiu","Syuzhet_NRC","SentimentR")
-colnames(finaldf) <- c("Sentiment","RF","CART","SVM","DRF","GBM","NB")
-
-# Calculating majority votes
-for (i in 1:nrow(finaldf)){
-  finaldf$Major[i] <- find_major(finaldf,i)
-}
-
-cmMAJOR <- table(finaldf$Sentiment, finaldf$Major)
-
-metrics(cmMAJOR) # Uni - acc 62%
+# Uni_Lemma_new pipeline 02.05.2018
+save.image('./Models/Senti_Manual_Uni_New_2018-05-02.RData')
 
 # Uni_Lemma stopwords enhancement 29.04.2018
-save.image('./Models/Senti_Manual_UniGram_Lemma_Stopwords_2018-04-29.RData')
-
-
-# Save Uni 
-save.image('./Models/Senti_Manual_UniGram_Lemma_2018-04-26.RData')
-
-gc()
-
-#####################################################################
-# BI-GRAM
-#####################################################################
-
-# Change to Bigram or Trigram
-frequencies <- DocumentTermMatrix(corp, control = list(tokenize = BigramTokenizer))
-
-# Remove these words that are not used very often. Keep terms that appear in 0.5% or more of the dataset
-sparse <- removeSparseTerms(frequencies, 0.995)
-
-ResultSparse <- as.data.frame(as.matrix(sparse))
-colnames(ResultSparse) <- make.names(colnames(ResultSparse))
-
-# Add sentiment column to the matrix
-ResultSparse <- cbind(sentiment = manual.df$sentiment,ResultSparse)
-
-# Build a training and testing set.
-set.seed(1908)
-
-split <- sample.split(ResultSparse$sentiment, SplitRatio=0.8)
-trainSparse <- subset(ResultSparse, split==TRUE)
-testSparse <- subset(ResultSparse, split==FALSE)
-
-# Test set for prebuilt packages
-test <- as.data.frame(subset(manual.df$processed,split==FALSE))
-colnames(test) <- 'processed'
-
-#########################################################
-# Multinomial logistic regression (baseline model)
-
-# Set the reference group for bin to be 1
-trainSparse$sentiment <- relevel(trainSparse$sentiment, ref=1)
-
-# Load the package
-library(nnet)
-# Run the model
-mlr.model <- multinom(sentiment ~ ., data=trainSparse,
-                      MaxNWts = 10000,
-                      trControl = train_control)
-
-predict.mlr <- predict(mlr.model, newdata = testSparse[,2:ncol(testSparse)], type = "class")
-length(predict.mlr)
-
-cm.mlr <- table(testSparse$sentiment, predict.mlr)
-metrics(cm.mlr) # Uni acc 58%
-
-##############################################################
-# Build a CART classification regression tree model on the training set
-
-tweetCART_kfold <- train(sentiment~., data = trainSparse, 
-                         model = "rpart", trControl = train_control)
-
-predictCART_kfold <- predict(tweetCART_kfold, newdata = testSparse[,2:ncol(testSparse)])
-cmCART_kfold <- table(testSparse$sentiment, predictCART_kfold)
-metrics(cmCART_kfold) # Uni acc 62% -> 65%
-
-#####################################################
-# Random Forest
-tweetRF <- train(sentiment ~ ., data=trainSparse, model = "rf", trControl = train_control)
-
-predictRF <- predict(tweetRF, newdata = testSparse[,2:ncol(testSparse)])
-
-cmRF <-   table(testSparse$sentiment, predictRF)
-
-metrics(cmRF) # Uni - acc 62% -> 66%
-
-###############################################
-# SVM
-
-SVM_kfold <-  train(sentiment ~ ., data=trainSparse, model = "svm", trControl=train_control)
-
-predictSVM_kfold <- predict(SVM_kfold, newdata = testSparse[,2:ncol(testSparse)])
-
-cmSVM_kfold <-   table(testSparse$sentiment, predictSVM_kfold)
-
-metrics(cmSVM_kfold) # Uni acc 63%
-
-#############################################################
-# Naive Bayes
-
-NBayes <- train(sentiment ~., data = trainSparse, laplace = 3, model = "nb", trControl = train_control)
-
-predictionsNB <- predict(NBayes,  newdata = testSparse[,2:ncol(testSparse)])
-
-cmNB <- table(testSparse$sentiment, predictionsNB)
-
-metrics(cmNB) # Uni - acc 63%
-
-###############################################
-
-###############################################
-
-# H2O GBM
-h2o.init()
-
-# Build a training and testing set for H2O environment
-
-trainH2O <- as.h2o(trainSparse)
-testH2O <- as.h2o(testSparse[,2:ncol(testSparse)])
-
-# Train GBM model
-gbm.model <- h2o.gbm(  training_frame = trainH2O,
-                       #validation_frame = testH2O,
-                       x=2:ncol(trainSparse),            
-                       y=1,         
-                       ntrees = 500, 
-                       max_depth = 50, 
-                       learn_rate = 0.3, 
-                       nfolds = 10,
-                       seed = 1234)
-
-model_path <- h2o.saveModel(object=gbm.model, path='./Models/', force=TRUE)
-print(model_path)
-predictionsGBM <- as.data.frame(h2o.predict(gbm.model,testH2O))
-
-cmGBM <-   table(testSparse$sentiment, predictionsGBM$predict)
-
-metrics(cmGBM) # Uni - acc 60%
-
-###################################################################
-# H2O DRF
-
-h2o_drf <- h2o.randomForest(    
-  training_frame = trainH2O,
-  #validation_frame = testH2O,
-  x=2:ncol(trainSparse),            
-  y=1,                          
-  ntrees = 500,                 # Increase max trees to 500 
-  max_depth = 30,               # Increase depth, from 20
-  nbins_cats = 5000,
-  nfolds = 10, 
-  seed = 1234)                  #
-
-model_path <- h2o.saveModel(object=h2o_drf, path='./Models/', force=TRUE)
-print(model_path)
-predictionsDRF <- as.data.frame(h2o.predict(h2o_drf,testH2O))
-cmDRF <- table(testSparse$sentiment, predictionsDRF$predict)
-
-metrics(cmDRF) # Uni - acc 63%
-
-####################
-#                  #
-#  PACKAGES MODEL  #
-#                  #
-####################
-#BingLiu Lexicon
-
-#Pulling in positive and negative wordlists
-#BingLiu
-pos.words <- scan('./0. Datasets/positive-words.txt', what='character', comment.char=';') #folder with positive dictionary
-neg.words <- scan('./0. Datasets/negative-words.txt', what='character', comment.char=';') #folder with negative dictionary
-#Adding words to positive and negative databases
-pos.words=c(pos.words, 'Congrats', 'prizes', 'prize', 'thanks', 'thnx', 'Grt', 'thx' ,
-            'gr8', 'plz', 'trending', 'recovering', 'brainstorm', 'leader','pump',
-            'rocket','ath','bullish','bull','undervalued')
-neg.words = c(neg.words, 'Fight', 'fighting', 'wtf', 'arrest', 'no', 'not',
-              'FUD','FOMO','bearish','dump','fear','atl','bear','wth','shit','fuck','dumb',
-              'weakhands','blood','bloody','scam','con-artist','liar','vaporware','shitfork')
-
-#evaluation function
-score.sentiment <- function(sentences, pos.words, neg.words, .progress='none')
-{
-  scores <- plyr::laply(sentences, function(sentence, pos.words, neg.words){
-    # clean up sentences with R's regex-driven global substitute, gsub():
-    sentence <- gsub('[[:punct:]]', "", sentence)
-    sentence <- gsub('[[:cntrl:]]', "", sentence)
-    sentence <- gsub('\\d+', "", sentence)
-    #convert to lower-case and remove punctuations with numbers
-    sentence <- removePunctuation(removeNumbers(tolower(sentence)))
-    removeURL <- function(x) gsub('"(http.*) |(http.*)$|\n', "", x)
-    sentence <- removeURL(sentence)
-    # split into words. str_split is in the stringr package
-    word.list <- str_split(sentence, '\\s+')
-    # sometimes a list() is one level of hierarchy too much
-    words <- unlist(word.list)
-    # compare our words to the dictionaries of positive & negative terms
-    pos.matches <- match(words, pos.words)
-    neg.matches <- match(words, neg.words)
-    # match() returns the position of the matched term or NA
-    # we just want a TRUE/FALSE:
-    pos.matches <- !is.na(pos.matches)
-    neg.matches <- !is.na(neg.matches)
-    score <- sum(pos.matches) - sum(neg.matches)
-    return(score)
-  }, pos.words, neg.words, .progress=.progress)
-  scores.df <- data.frame(score=scores, message=sentences)
-  return(scores.df)
-}
-
-scores <- score.sentiment(manual.df$text, pos.words, neg.words, .progress='text')
-result <- scores
-
-#Add ID to result set
-result$status_id <- manual.df$status_id
-#add new scores as a column
-result <- mutate(result, status_id, sentiment = ifelse(result$score > 0, 1, 
-                                                       ifelse(result$score < 0, -1, 0)))
-
-cmBL <- table(manual.df$sentiment,result$sentiment)
-metrics(cmBL) # acc 57%
-
-######################################
-# Syuzhet package
-# NRC lexicon
-test.syuzhet <- syuzhet::get_nrc_sentiment(as.character(manual.df$processed))
-test.syuzhet <- as.data.frame(test.syuzhet[,9:10])
-test.syuzhet$sent <- ifelse((test.syuzhet$positive - test.syuzhet$negative) == 0, 
-                            0, 
-                            ifelse(test.syuzhet$positive - test.syuzhet$negative > 0 , 
-                                   1, -1))# translate sentiments back to the original training data
-test.syuzhet$sent <- as.factor(test.syuzhet$sent)
-
-#confusionMatrix(manual.df$sentiment, test.syuzhet$sent)
-cm_nrc <- table(manual.df$sentiment, test.syuzhet$sent)
-metrics(cm_nrc) # acc 47%
-
-######################################
-# Syuzhet
-test.syuzhet2 <- syuzhet::get_sentiment(as.character(manual.df$processed))
-
-test.syuzhet2 <- as.data.frame(test.syuzhet2)
-
-test.syuzhet2$sent <- ifelse(test.syuzhet2$test.syuzhet2 < 0,-1,
-                             ifelse(test.syuzhet2$test.syuzhet2 == 0 ,0,1))
-
-test.syuzhet2$sent <- as.factor(test.syuzhet2$sent)
-
-#confusionMatrix(manual.df$sentiment, test.syuzhet2$sent)
-cm_syuzhet <- table(manual.df$sentiment, test.syuzhet2$sent)
-metrics(cm_syuzhet) # acc 53%
-
-######################################
-# Syuzhet
-test.syuzhet3 <- syuzhet::get_sentiment(as.character(manual.df$processed), method = "afinn")
-
-test.syuzhet3 <- as.data.frame(test.syuzhet3)
-
-test.syuzhet3$sent <- ifelse(test.syuzhet3$test.syuzhet3 < 0,-1,
-                             ifelse(test.syuzhet3$test.syuzhet3 == 0 ,0,1))
-
-test.syuzhet3$sent <- as.factor(test.syuzhet3$sent)
-
-#confusionMatrix(manual.df$sentiment, test.syuzhet3$sent)
-cm_afinn <- table(manual.df$sentiment, test.syuzhet3$sent)
-metrics(cm_afinn) # acc 55%
-
-######################################
-# SentimentR
-
-test.sentimentR <- sentimentr::sentiment_by(as.character(sentimentr::get_sentences(manual.df$processed)))
-test.sentimentR$sent <- ifelse(test.sentimentR$ave_sentiment == 0, 0, 
-                               ifelse(test.sentimentR$ave_sentiment > 0 , 1, -1)) # translate sentiments back to the original training data
-
-test.sentimentR$sent <- as.factor(test.sentimentR$sent)
-
-confusionMatrix(manual.df$sentiment, test.sentimentR$sent)
-cm_sentimentr <- table(manual.df$sentiment, test.sentimentR$sent)
-metrics(cm_sentimentr) # acc 51%
-
-#########################################################
-# MAJORITY VOTING (packages)
-
-major.packages <- as.data.frame(as.factor(manual.df$sentiment))
-major.packages <- cbind(major.packages,       # target variable
-                        as.factor(result$sentiment),     # Bing Liu lexicon
-                        as.factor(test.syuzhet$sent),    # NRC lexicon
-                        as.factor(test.syuzhet2$sent),   # Syuzhet
-                        as.factor(test.syuzhet3$sent),   # AFINN lexicon
-                        as.factor(test.sentimentR$sent)) # Sentiment R
-
-colnames(major.packages) <- c("Sentiment","BingLiu","NRC","Syuzhet","AFINN","SentimentR")
-
-# The majority vote
-find_major <- function(df,x){
-  a <- df[x,]
-  neg <- 0
-  pos <- 0
-  neu <- 0
-  if (names(df[1]) == 'Sentiment'){j <- 2} else {j<-1}
-  for (i in j:ncol(a)){
-    if (a[i] == 'Negative'| a[i] == '-1'){neg <- neg + 1}
-    else if (a[i] == 'Positive'| a[i] == '1'){pos <- pos + 1}
-    else if (a[i] == 'Neutral'| a[i] == '0'){neu <- neu + 1}
-  }
-  result <- c("Positive", "Negative", "Neutral")[which.max(c(pos,neg,neu))]
-}
-
-# Calculating majority votes
-for (i in 1:nrow(major.packages)){
-  major.packages$Major[i] <- find_major(major.packages,i)
-}
-
-cmMAJOR.packages <- table(major.packages$Sentiment, major.packages$Major)
-
-metrics(cmMAJOR.packages) # acc 52%
-
-#########################################################
-# MAJORITY VOTING (trained models)
-
-finaldf <- cbind(testSparse$sentiment,
-                 as.data.frame(predictRF),         # Random Forest
-                 as.data.frame(predictCART_kfold), # Classification and Regression Trees
-                 as.data.frame(predictSVM_kfold),  # Support Vector Machine
-                 predictionsDRF$predict,           # Distributed Random Forest
-                 predictionsGBM$predict,           # Gradient Boosting Machine
-                 as.data.frame(predictionsNB))     # Naive Bayes
-
-#colnames(finaldf) <- c("Sentiment","RF","CART","SVM","DRF","GBM","NB","BingLiu","Syuzhet_NRC","SentimentR")
-colnames(finaldf) <- c("Sentiment","RF","CART","SVM","DRF","GBM","NB")
-
-# Calculating majority votes
-for (i in 1:nrow(finaldf)){
-  finaldf$Major[i] <- find_major(finaldf,i)
-}
-
-cmMAJOR <- table(finaldf$Sentiment, finaldf$Major)
-
-metrics(cmMAJOR) # Uni - acc 62%
-# Save Bi 
-save.image('./Models/Senti_Manual_BiGram_Lemma_2018-04-26.RData')
-
-#####################################################################
-# TRI-GRAM
-#####################################################################
-gc()
-# Change to Bigram or Trigram
-frequencies <- DocumentTermMatrix(corp, control = list(tokenize = TrigramTokenizer))
-
-# Remove these words that are not used very often. Keep terms that appear in 0.5% or more of the dataset
-sparse <- removeSparseTerms(frequencies, 0.995)
-
-ResultSparse <- as.data.frame(as.matrix(sparse))
-colnames(ResultSparse) <- make.names(colnames(ResultSparse))
-
-# Add sentiment column to the matrix
-ResultSparse <- cbind(sentiment = manual.df$sentiment,ResultSparse)
-
-# Build a training and testing set.
-set.seed(1908)
-
-split <- sample.split(ResultSparse$sentiment, SplitRatio=0.8)
-trainSparse <- subset(ResultSparse, split==TRUE)
-testSparse <- subset(ResultSparse, split==FALSE)
-
-# Test set for prebuilt packages
-test <- as.data.frame(subset(manual.df$processed,split==FALSE))
-colnames(test) <- 'processed'
-
-#########################################################
-# Multinomial logistic regression (baseline model)
-
-# Set the reference group for bin to be 1
-trainSparse$sentiment <- relevel(trainSparse$sentiment, ref=1)
-
-# Load the package
-library(nnet)
-# Run the model
-mlr.model <- multinom(sentiment ~ ., data=trainSparse,
-                      MaxNWts = 10000,
-                      trControl = train_control)
-
-predict.mlr <- predict(mlr.model, newdata = testSparse[,2:ncol(testSparse)], type = "class")
-length(predict.mlr)
-
-cm.mlr <- table(testSparse$sentiment, predict.mlr)
-metrics(cm.mlr) # Uni acc 58%
-
-##############################################################
-# Build a CART classification regression tree model on the training set
-
-tweetCART_kfold <- train(sentiment~., data = trainSparse, 
-                         model = "rpart", trControl = train_control)
-
-predictCART_kfold <- predict(tweetCART_kfold, newdata = testSparse[,2:ncol(testSparse)])
-cmCART_kfold <- table(testSparse$sentiment, predictCART_kfold)
-metrics(cmCART_kfold) # Uni acc 62% -> 65%
-
-#####################################################
-# Random Forest
-tweetRF <- train(sentiment ~ ., data=trainSparse, model = "rf", trControl = train_control)
-
-predictRF <- predict(tweetRF, newdata = testSparse[,2:ncol(testSparse)])
-
-cmRF <-   table(testSparse$sentiment, predictRF)
-
-metrics(cmRF) # Uni - acc 62% -> 66%
-
-###############################################
-# SVM
-
-SVM_kfold <-  train(sentiment ~ ., data=trainSparse, model = "svm", trControl=train_control)
-
-predictSVM_kfold <- predict(SVM_kfold, newdata = testSparse[,2:ncol(testSparse)])
-
-cmSVM_kfold <-   table(testSparse$sentiment, predictSVM_kfold)
-
-metrics(cmSVM_kfold) # Uni acc 63%
-
-#############################################################
-# Naive Bayes
-
-NBayes <- train(sentiment ~., data = trainSparse, laplace = 3, model = "nb", trControl = train_control)
-
-predictionsNB <- predict(NBayes,  newdata = testSparse[,2:ncol(testSparse)])
-
-cmNB <- table(testSparse$sentiment, predictionsNB)
-
-metrics(cmNB) # Uni - acc 63%
-
-###############################################
-
-###############################################
-
-# H2O GBM
-h2o.init()
-
-# Build a training and testing set for H2O environment
-
-trainH2O <- as.h2o(trainSparse)
-testH2O <- as.h2o(testSparse[,2:ncol(testSparse)])
-
-# Train GBM model
-gbm.model <- h2o.gbm(  training_frame = trainH2O,
-                       #validation_frame = testH2O,
-                       x=2:ncol(trainSparse),            
-                       y=1,         
-                       ntrees = 500, 
-                       max_depth = 50, 
-                       learn_rate = 0.3, 
-                       nfolds = 10,
-                       seed = 1234)
-
-model_path <- h2o.saveModel(object=gbm.model, path='./Models/', force=TRUE)
-print(model_path)
-predictionsGBM <- as.data.frame(h2o.predict(gbm.model,testH2O))
-
-cmGBM <-   table(testSparse$sentiment, predictionsGBM$predict)
-
-metrics(cmGBM) # Uni - acc 60%
-
-###################################################################
-# H2O DRF
-
-h2o_drf <- h2o.randomForest(    
-  training_frame = trainH2O,
-  #validation_frame = testH2O,
-  x=2:ncol(trainSparse),            
-  y=1,                          
-  ntrees = 500,                 # Increase max trees to 500 
-  max_depth = 30,               # Increase depth, from 20
-  nbins_cats = 5000,
-  nfolds = 10, 
-  seed = 1234)                  #
-
-model_path <- h2o.saveModel(object=h2o_drf, path='./Models/', force=TRUE)
-print(model_path)
-predictionsDRF <- as.data.frame(h2o.predict(h2o_drf,testH2O))
-cmDRF <- table(testSparse$sentiment, predictionsDRF$predict)
-
-metrics(cmDRF) # Uni - acc 63%
-
-h2o.shutdown()
-####################
-#                  #
-#  PACKAGES MODEL  #
-#                  #
-####################
-#BingLiu Lexicon
-
-#Pulling in positive and negative wordlists
-#BingLiu
-pos.words <- scan('./0. Datasets/positive-words.txt', what='character', comment.char=';') #folder with positive dictionary
-neg.words <- scan('./0. Datasets/negative-words.txt', what='character', comment.char=';') #folder with negative dictionary
-#Adding words to positive and negative databases
-pos.words=c(pos.words, 'Congrats', 'prizes', 'prize', 'thanks', 'thnx', 'Grt', 'thx' ,
-            'gr8', 'plz', 'trending', 'recovering', 'brainstorm', 'leader','pump',
-            'rocket','ath','bullish','bull','undervalued')
-neg.words = c(neg.words, 'Fight', 'fighting', 'wtf', 'arrest', 'no', 'not',
-              'FUD','FOMO','bearish','dump','fear','atl','bear','wth','shit','fuck','dumb',
-              'weakhands','blood','bloody','scam','con-artist','liar','vaporware','shitfork')
-
-#evaluation function
-score.sentiment <- function(sentences, pos.words, neg.words, .progress='none')
-{
-  scores <- plyr::laply(sentences, function(sentence, pos.words, neg.words){
-    # clean up sentences with R's regex-driven global substitute, gsub():
-    sentence <- gsub('[[:punct:]]', "", sentence)
-    sentence <- gsub('[[:cntrl:]]', "", sentence)
-    sentence <- gsub('\\d+', "", sentence)
-    #convert to lower-case and remove punctuations with numbers
-    sentence <- removePunctuation(removeNumbers(tolower(sentence)))
-    removeURL <- function(x) gsub('"(http.*) |(http.*)$|\n', "", x)
-    sentence <- removeURL(sentence)
-    # split into words. str_split is in the stringr package
-    word.list <- str_split(sentence, '\\s+')
-    # sometimes a list() is one level of hierarchy too much
-    words <- unlist(word.list)
-    # compare our words to the dictionaries of positive & negative terms
-    pos.matches <- match(words, pos.words)
-    neg.matches <- match(words, neg.words)
-    # match() returns the position of the matched term or NA
-    # we just want a TRUE/FALSE:
-    pos.matches <- !is.na(pos.matches)
-    neg.matches <- !is.na(neg.matches)
-    score <- sum(pos.matches) - sum(neg.matches)
-    return(score)
-  }, pos.words, neg.words, .progress=.progress)
-  scores.df <- data.frame(score=scores, message=sentences)
-  return(scores.df)
-}
-
-scores <- score.sentiment(manual.df$text, pos.words, neg.words, .progress='text')
-result <- scores
-
-#Add ID to result set
-result$status_id <- manual.df$status_id
-#add new scores as a column
-result <- mutate(result, status_id, sentiment = ifelse(result$score > 0, 1, 
-                                                       ifelse(result$score < 0, -1, 0)))
-
-cmBL <- table(manual.df$sentiment,result$sentiment)
-metrics(cmBL) # acc 57%
-
-######################################
-# Syuzhet package
-# NRC lexicon
-test.syuzhet <- syuzhet::get_nrc_sentiment(as.character(manual.df$processed))
-test.syuzhet <- as.data.frame(test.syuzhet[,9:10])
-test.syuzhet$sent <- ifelse((test.syuzhet$positive - test.syuzhet$negative) == 0, 
-                            0, 
-                            ifelse(test.syuzhet$positive - test.syuzhet$negative > 0 , 
-                                   1, -1))# translate sentiments back to the original training data
-test.syuzhet$sent <- as.factor(test.syuzhet$sent)
-
-#confusionMatrix(manual.df$sentiment, test.syuzhet$sent)
-cm_nrc <- table(manual.df$sentiment, test.syuzhet$sent)
-metrics(cm_nrc) # acc 47%
-
-######################################
-# Syuzhet
-test.syuzhet2 <- syuzhet::get_sentiment(as.character(manual.df$processed))
-
-test.syuzhet2 <- as.data.frame(test.syuzhet2)
-
-test.syuzhet2$sent <- ifelse(test.syuzhet2$test.syuzhet2 < 0,-1,
-                             ifelse(test.syuzhet2$test.syuzhet2 == 0 ,0,1))
-
-test.syuzhet2$sent <- as.factor(test.syuzhet2$sent)
-
-#confusionMatrix(manual.df$sentiment, test.syuzhet2$sent)
-cm_syuzhet <- table(manual.df$sentiment, test.syuzhet2$sent)
-metrics(cm_syuzhet) # acc 53%
-
-######################################
-# Syuzhet
-test.syuzhet3 <- syuzhet::get_sentiment(as.character(manual.df$processed), method = "afinn")
-
-test.syuzhet3 <- as.data.frame(test.syuzhet3)
-
-test.syuzhet3$sent <- ifelse(test.syuzhet3$test.syuzhet3 < 0,-1,
-                             ifelse(test.syuzhet3$test.syuzhet3 == 0 ,0,1))
-
-test.syuzhet3$sent <- as.factor(test.syuzhet3$sent)
-
-#confusionMatrix(manual.df$sentiment, test.syuzhet3$sent)
-cm_afinn <- table(manual.df$sentiment, test.syuzhet3$sent)
-metrics(cm_afinn) # acc 55%
-
-######################################
-# SentimentR
-
-test.sentimentR <- sentimentr::sentiment_by(as.character(sentimentr::get_sentences(manual.df$processed)))
-test.sentimentR$sent <- ifelse(test.sentimentR$ave_sentiment == 0, 0, 
-                               ifelse(test.sentimentR$ave_sentiment > 0 , 1, -1)) # translate sentiments back to the original training data
-
-test.sentimentR$sent <- as.factor(test.sentimentR$sent)
-
-confusionMatrix(manual.df$sentiment, test.sentimentR$sent)
-cm_sentimentr <- table(manual.df$sentiment, test.sentimentR$sent)
-metrics(cm_sentimentr) # acc 51%
-
-#########################################################
-# MAJORITY VOTING (packages)
-
-major.packages <- as.data.frame(as.factor(manual.df$sentiment))
-major.packages <- cbind(major.packages,       # target variable
-                        as.factor(result$sentiment),     # Bing Liu lexicon
-                        as.factor(test.syuzhet$sent),    # NRC lexicon
-                        as.factor(test.syuzhet2$sent),   # Syuzhet
-                        as.factor(test.syuzhet3$sent),   # AFINN lexicon
-                        as.factor(test.sentimentR$sent)) # Sentiment R
-
-colnames(major.packages) <- c("Sentiment","BingLiu","NRC","Syuzhet","AFINN","SentimentR")
-
-# The majority vote
-find_major <- function(df,x){
-  a <- df[x,]
-  neg <- 0
-  pos <- 0
-  neu <- 0
-  if (names(df[1]) == 'Sentiment'){j <- 2} else {j<-1}
-  for (i in j:ncol(a)){
-    if (a[i] == 'Negative'| a[i] == '-1'){neg <- neg + 1}
-    else if (a[i] == 'Positive'| a[i] == '1'){pos <- pos + 1}
-    else if (a[i] == 'Neutral'| a[i] == '0'){neu <- neu + 1}
-  }
-  result <- c("Positive", "Negative", "Neutral")[which.max(c(pos,neg,neu))]
-}
-
-# Calculating majority votes
-for (i in 1:nrow(major.packages)){
-  major.packages$Major[i] <- find_major(major.packages,i)
-}
-
-cmMAJOR.packages <- table(major.packages$Sentiment, major.packages$Major)
-
-metrics(cmMAJOR.packages) # acc 52%
-
-#########################################################
-# MAJORITY VOTING (trained models)
-
-finaldf <- cbind(testSparse$sentiment,
-                 as.data.frame(predictRF),         # Random Forest
-                 as.data.frame(predictCART_kfold), # Classification and Regression Trees
-                 as.data.frame(predictSVM_kfold),  # Support Vector Machine
-                 predictionsDRF$predict,           # Distributed Random Forest
-                 predictionsGBM$predict,           # Gradient Boosting Machine
-                 as.data.frame(predictionsNB))     # Naive Bayes
-
-#colnames(finaldf) <- c("Sentiment","RF","CART","SVM","DRF","GBM","NB","BingLiu","Syuzhet_NRC","SentimentR")
-colnames(finaldf) <- c("Sentiment","RF","CART","SVM","DRF","GBM","NB")
-
-# Calculating majority votes
-for (i in 1:nrow(finaldf)){
-  finaldf$Major[i] <- find_major(finaldf,i)
-}
-
-cmMAJOR <- table(finaldf$Sentiment, finaldf$Major)
-
-metrics(cmMAJOR) # Uni - acc 62%
-# Save Tri 
-save.image('./Models/Senti_Manual_TriGram_Lemma_2018-04-26.RData')
+# save.image('./Models/Senti_Manual_UniGram_Lemma_Stopwords_2018-04-29.RData')
+# 
+# # Save Uni 
+# save.image('./Models/Senti_Manual_UniGram_Lemma_2018-04-26.RData')
+# # Save Bi - change to Bigram
+# save.image('./Models/Senti_Manual_BiGram_Lemma_2018-04-26.RData')
+# # Save Tri - change to Trigram
+# save.image('./Models/Senti_Manual_TriGram_Lemma_2018-04-26.RData')
