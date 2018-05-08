@@ -27,11 +27,6 @@ if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
 }
 lapply(packages, require, character.only = TRUE)
 
-# if use openxlsx
-# ZIP PATH for dev tools
-if(devtools::find_rtools()) Sys.setenv(R_ZIPCMD= file.path(devtools:::get_rtools_path(),"zip"))
-library(openxlsx)
-
 ############################
 token_name <- 'BTC'
 
@@ -42,7 +37,7 @@ start_date <- as.Date('2017-09-30')
 ##########################
 # load price dataset
 
-price.df <- read_csv("./1. Crawlers/Crypto-Markets_2018-04-22.csv") %>%
+price.df <- read_csv("./1. Crawlers/Crypto-Markets_2018-05-07.csv") %>%
   filter(symbol == token_name & date >= start_date)
 
 price.df <- price.df[c('date','close')]
@@ -332,6 +327,7 @@ metrics <- function(cm) {
 train_control <- trainControl(## 10-fold CV
   method = "cv",
   number = 10)
+
 #################################
 # Base-line model 
 logitrain <- train
@@ -353,9 +349,9 @@ prediction.Logi <- ifelse(prediction.Logi < 0.5,'down','up')
 
 
 cmLogi <- table(test$bin, prediction.Logi)
-metrics(cmLogi)
+metrics(cmLogi) # 46%
 
-ConfusionMatrix(prediction.Logi,test$bin)
+confusionMatrix(prediction.Logi,test$bin)
 
 ########################################
 # Naive Bayes
@@ -370,11 +366,11 @@ NBayes <- train(bin ~.,
 predictionsNB <- predict(NBayes, newdata = test[,2:ncol(test)])
 cmNB <- table(test$bin, predictionsNB)
 
-ConfusionMatrix(predictionsNB,test$bin)
+confusionMatrix(predictionsNB,test$bin)
 
 metrics(cmNB) # acc 37%
 
-##############
+##########################################################
 # Recursive feature elimination (via caret package)
 set.seed(1908)
 
@@ -415,7 +411,7 @@ newNB_rfe
 cmNB_rfe1 <- table(test$bin,newNB_rfe$pred)
 metrics(cmNB_rfe1) # acc up to 46%
 
-ConfusionMatrix(newNB_rfe$pred,test$bin)
+confusionMatrix(newNB_rfe$pred,test$bin)
 
 # Route 2
 ## Apply new predictors to modeling
@@ -434,49 +430,6 @@ predictionsNB_rfe <- predict(NBayes_rfe, newdata=test[,2:ncol(test)])
 cmNB_rfe2 <- table(test$bin, predictionsNB_rfe)
 
 metrics(cmNB_rfe2) # acc 46%
-
+confusionMatrix(predictionsNB_rfe,test$bin)
 ##########################################
-# Support Vector Machine
 
-SVM <-  train(bin ~ ., 
-              data=train, 
-              model = "svm", 
-              na.action = na.exclude,
-              trControl=train_control)
-
-predictSVM <- predict(SVM, newdata=test[,2:ncol(test)])
-
-cmSVM <-   table(test$bin, predictSVM)
-
-metrics(cmSVM) # acc 37%
-
-# Support Vector Machine - RFE
-set.seed(1908)
-svmFuncs <- caretFuncs
-ctrl <- rfeControl(functions = svmFuncs, #SVM
-                   method = "cv",
-                   number = 10,
-                   verbose = FALSE)
-
-# convert dependent variables to factor vector
-y <- train[,1]
-y <- as.vector(unlist(y))
-y <- as.factor(y)
-
-# apply rfe
-svmProfile <- rfe(x = train[,2:ncol(train)], # features
-                 y,
-                 sizes = 1:8,   # retain from 1-8 features
-                 rfeControl =  ctrl)
-
-# summary of rfe
-svmProfile
-# get predictors
-predictors(svmProfile)
-
-svmProfile$fit
-head(svmProfile$resample)
-
-# Ploting rfe progress
-trellis.par.set(caretTheme())
-plot(nbProfile, type = c("g", "o"), main = 'RFE for Naive Bayes')

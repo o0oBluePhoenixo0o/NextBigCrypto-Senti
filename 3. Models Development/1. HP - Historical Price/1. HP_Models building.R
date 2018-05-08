@@ -28,11 +28,6 @@ if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
 }
 lapply(packages, require, character.only = TRUE)
 
-# if use openxlsx
-# ZIP PATH for dev tools
-if(devtools::find_rtools()) Sys.setenv(R_ZIPCMD= file.path(devtools:::get_rtools_path(),"zip"))
-library(openxlsx)
-
 ############################
 token_name <- 'BTC'
 
@@ -43,7 +38,7 @@ start_date <- as.Date('2017-09-30')
 ##########################
 # load price dataset
 
-price.df <- read_csv("./1. Crawlers/Crypto-Markets_2018-04-30.csv") %>%
+price.df <- read_csv("./1. Crawlers/Crypto-Markets_2018-05-07.csv") %>%
   filter(symbol == token_name & date >= start_date)
 
 price.df <- price.df[c('date','close')]
@@ -388,6 +383,7 @@ metrics(cm.mlr) # acc 33%
 
 ########################################
 # Naive Bayes
+########################################
 
 NBayes <- train(bin ~., 
                 data = train, 
@@ -458,3 +454,7 @@ predictionsNB_rfe <- predict(NBayes_rfe, newdata=test[,2:ncol(test)])
 cmNB_rfe2 <- table(test$bin, predictionsNB_rfe)
 
 metrics(cmNB_rfe2) # acc 46%
+
+########################################
+# Gradient Boosting Machine
+########################################

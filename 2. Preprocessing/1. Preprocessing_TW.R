@@ -79,25 +79,10 @@ AposToSpace = function(x){
 # Constructing abbreviation list
 
 # Abbreviation conversion 30.04.18
-myAbbrevs <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/abbrev.csv')
+# myAbbrevs <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/abbrev.csv')
 
-# Convert to lower case
-myAbbrevs$abv <- tolower(myAbbrevs$abv)
-myAbbrevs$rep <- tolower(myAbbrevs$rep)
-
-# Adding abbreviations
-myAbbrevs[nrow(myAbbrevs)+1,1] <- ':)'
-myAbbrevs[nrow(myAbbrevs),2] <- 'smile'
-myAbbrevs[nrow(myAbbrevs)+1,1] <- '=))'
-myAbbrevs[nrow(myAbbrevs),2] <- 'laugh'
-myAbbrevs[nrow(myAbbrevs)+1,1] <- '=)'
-myAbbrevs[nrow(myAbbrevs),2] <- 'laugh'
-myAbbrevs[nrow(myAbbrevs)+1,1] <- ':('
-myAbbrevs[nrow(myAbbrevs),2] <- 'sad'
-myAbbrevs[nrow(myAbbrevs)+1,1] <- ':(('
-myAbbrevs[nrow(myAbbrevs),2] <- 'sad'
-myAbbrevs[nrow(myAbbrevs)+1,1] <- ':D'
-myAbbrevs[nrow(myAbbrevs),2] <- 'smile'
+# new version of abbrev dict 04.05.2018
+myAbbrevs <- openxlsx::read.xlsx('~/GitHub/NextBigCrypto-Senti/0. Datasets/abbrev.xlsx')
 
 # No need to do this since tokens will be put behind "$" 01.05.2018
 
@@ -136,23 +121,25 @@ convertAbbreviations <- function(message){
     return (newText)
   }
 }
+
 ###################################################################
 Cleandata <- function(df) {
   # Cross-validating with list of Twitter_bots
   bots <- openxlsx::read.xlsx('~/GitHub/NextBigCrypto-Senti/0. Datasets/Twitter_Bot_Users_(Final).xlsx')
   df <- inner_join(df,bots, by = 'screen_name')
-  df <- df %>% filter(botprob < 0.8| is.na(botprob)) # filter users that are >80% chance a bot
-  
+  df <- df %>% filter(botprob < 0.85| is.na(botprob)) # filter users that are >85% chance a bot
+
   # Convert unicode
   df$text <- sapply(df$text,function(x) trueunicode.hack(x))
   
   # remove duplicates base on tweets
   df <- df[!duplicated(df$text),]
   
+  df$processed <- sapply(df$text, function(x) removeURL(x)) # remove URL
   # To lower case
-  df$processed <- sapply(df$text, function(x) tolower(x))
-  df$processed <- sapply(df$processed, function(x) gsub("[.,]","", x, perl = TRUE)) #remove . and ,
-  df$processed <- sapply(df$processed, function(x) removeURL(x)) # remove URL
+  df$processed <- sapply(df$processed, function(x) tolower(x))
+  df$processed <- sapply(df$processed, function(x) gsub("[.,]"," ", x, perl = TRUE)) #remove . and ,
+  
   
   # Remove duplicates 
   df <- df[!duplicated(df$processed),]
@@ -176,7 +163,7 @@ Cleandata <- function(df) {
   ###########################################
   
   # Get rid of references to other screennames
-  df$processed <- str_replace_all(df$processed,"@[a-z,A-Z]*","")  
+  df$processed <- str_replace_all(df$processed,"@[a-z,A-Z,_]*"," ")  
   
   # remove punctuations except for # $ 
   df$processed <- sapply(df$processed, function(x) gsub( "[^#$a-zA-Z\\s]" , "" , x , perl = TRUE ))
@@ -208,4 +195,3 @@ Cleandata <- function(df) {
   
   return(df)
 }
-

@@ -5,6 +5,7 @@
 # 25.04.18 - New preprocessing pipeline v2
 # 29.04.18 - Test stopwords v2 with token additions --> v1 is better
 # 30.04.18 - Abbreviation conversion for Unigram + Lemmatization + Stopwords v1
+# 08.05.18 - Revisit tf-idf + fix abbreviation conversion + completed enhanced GBM (tuned)
 
 # clear the environment
 rm(list= ls())
@@ -42,7 +43,7 @@ lapply(packages, require, character.only = TRUE)
 #   dplyr::select(status_id,text,processed,sentiment,trade_senti) %>%
 #   filter(sentiment %in% c(-1,0,1))
 
-manual.df <- read_csv('Manual_Dataset_0105.csv') %>%
+manual.df <- read_csv('Manual_Dataset_0805.csv') %>%
   dplyr::select(status_id,text,processed,sentiment) %>%
   filter(sentiment %in% c(-1,0,1))
 
@@ -51,9 +52,9 @@ manual.df$status_id <- as.character(manual.df$status_id)
 manual.df %>% group_by(sentiment) %>%tally # overall observation
 
 # 01.05.2018
-# Positive	1159
-# Neutral	  1432
-# Negative	393
+# Positive	1177
+# Neutral	  1457
+# Negative	395
 
 ########################################################
 # Preprocessing
@@ -72,14 +73,14 @@ TrigramTokenizer <- function(x){ unlist(lapply(ngrams(words(x), 3), paste, colla
 #############################
 
 # Unigram
-frequencies <- DocumentTermMatrix(corp)
+#frequencies <- DocumentTermMatrix(corp)
 
 # Change to Bigram or Trigram
 #frequencies <- DocumentTermMatrix(corp, control = list(tokenize = TrigramTokenizer))
 
 # TF-IDF weighting 09.04.2018 (lower acc)
-#frequencies <- DocumentTermMatrix(corp,
-#                                  control = list(weighting = function(x) weightTfIdf(x, normalize = FALSE)))
+frequencies <- DocumentTermMatrix(corp,
+                                 control = list(weighting = function(x) weightTfIdf(x, normalize = FALSE)))
 
 # Remove these words that are not used very often. Keep terms that appear in 0.5% or more of the dataset
 sparse <- removeSparseTerms(frequencies, 0.995)
@@ -345,6 +346,22 @@ finaldf <- cbind(testSparse$sentiment,
 #colnames(finaldf) <- c("Sentiment","RF","CART","SVM","DRF","GBM","NB","BingLiu","Syuzhet_NRC","SentimentR")
 colnames(finaldf) <- c("Sentiment","RF","CART","SVM","DRF","GBM","NB","C.50")
 
+# The majority vote
+find_major <- function(df,x){
+  a <- df[x,]
+  neg <- 0
+  pos <- 0
+  neu <- 0
+  if (names(df[1]) == 'Sentiment'){j <- 2} else {j<-1}
+  for (i in j:ncol(a)){
+    if (a[i] == 'Negative'| a[i] == '-1'){neg <- neg + 1}
+    else if (a[i] == 'Positive'| a[i] == '1'){pos <- pos + 1}
+    else if (a[i] == 'Neutral'| a[i] == '0'){neu <- neu + 1}
+  }
+  result <- c("Positive", "Negative", "Neutral")[which.max(c(pos,neg,neu))]
+}
+
+
 # Calculating majority votes
 for (i in 1:nrow(finaldf)){
   finaldf$Major[i] <- find_major(finaldf,i)
@@ -374,25 +391,38 @@ neg.words = c(neg.words, 'Fight', 'fighting', 'wtf', 'arrest', 'no', 'not',
               'FUD','FOMO','bearish','dump','fear','atl','bear','wth','shit','fuck','dumb',
               'weakhands','blood','bloody','scam','con-artist','liar','vaporware','shitfork')
 
+# load preprocessing function
+source('~/GitHub/NextBigCrypto-Senti/2. Preprocessing/1. Preprocessing_TW.R')
+
 #evaluation function
 score.sentiment <- function(sentences, pos.words, neg.words, .progress='none')
 {
   scores <- plyr::laply(sentences, function(sentence, pos.words, neg.words){
-    # clean up sentences with R's regex-driven global substitute, gsub():
-    sentence <- gsub('[[:punct:]]', "", sentence)
-    sentence <- gsub('[[:cntrl:]]', "", sentence)
-    sentence <- gsub('\\d+', "", sentence)
+    # unicode conversion
+    sentence <- trueunicode.hack(sentence)
+    sentence <- gsub("[.,]"," ", sentence, perl = TRUE) #remove . and ,
+    # remove screen name
+    sentences <- str_replace_all(sentence,"@[a-z,A-Z,_]*"," ") 
+    # convert abbreviation
+    sentence <- convertAbbreviations(sentence)
+    sentence <- gsub("[\r\n]", " ", sentence) # fix line breakers
+    
     #convert to lower-case and remove punctuations with numbers
-    sentence <- removePunctuation(removeNumbers(tolower(sentence)))
-    removeURL <- function(x) gsub('"(http.*) |(http.*)$|\n', "", x)
+    sentence <- gsub( "[^#$a-zA-Z\\s]" , "" , sentence , perl = TRUE ) #remove punc except $
+    sentence <- removeNumbers(tolower(sentence))
+    removeURL <- function(x) rm_url(x, pattern=pastex("@rm_twitter_url", "@rm_url"))
     sentence <- removeURL(sentence)
+    
     # split into words. str_split is in the stringr package
     word.list <- str_split(sentence, '\\s+')
+    
     # sometimes a list() is one level of hierarchy too much
     words <- unlist(word.list)
+    
     # compare our words to the dictionaries of positive & negative terms
     pos.matches <- match(words, pos.words)
     neg.matches <- match(words, neg.words)
+    
     # match() returns the position of the matched term or NA
     # we just want a TRUE/FALSE:
     pos.matches <- !is.na(pos.matches)
@@ -414,7 +444,7 @@ result <- mutate(result, status_id, sentiment = ifelse(result$score > 0, 1,
                                                        ifelse(result$score < 0, -1, 0)))
 
 cmBL <- table(manual.df$sentiment,result$sentiment)
-metrics(cmBL) # acc 57%
+metrics(cmBL) # acc 58%
 
 ######################################
 # Syuzhet package
@@ -487,20 +517,6 @@ major.packages <- cbind(major.packages,       # target variable
 
 colnames(major.packages) <- c("Sentiment","BingLiu","NRC","Syuzhet","AFINN","SentimentR")
 
-# The majority vote
-find_major <- function(df,x){
-  a <- df[x,]
-  neg <- 0
-  pos <- 0
-  neu <- 0
-  if (names(df[1]) == 'Sentiment'){j <- 2} else {j<-1}
-  for (i in j:ncol(a)){
-    if (a[i] == 'Negative'| a[i] == '-1'){neg <- neg + 1}
-    else if (a[i] == 'Positive'| a[i] == '1'){pos <- pos + 1}
-    else if (a[i] == 'Neutral'| a[i] == '0'){neu <- neu + 1}
-  }
-  result <- c("Positive", "Negative", "Neutral")[which.max(c(pos,neg,neu))]
-}
 
 # Calculating majority votes
 for (i in 1:nrow(major.packages)){
@@ -509,10 +525,12 @@ for (i in 1:nrow(major.packages)){
 
 cmMAJOR.packages <- table(major.packages$Sentiment, major.packages$Major)
 
-metrics(cmMAJOR.packages) # acc 52%
+metrics(cmMAJOR.packages) # acc 49%
 
+save.image('./Models/Senti_Manual_Uni_TFIDF_080518.RData')
+#load('./Models/Senti_Manual_Uni_TFIDF_working.RData')
 # Uni_Lemma_new pipeline 02.05.2018
-save.image('./Models/Senti_Manual_Uni_New_2018-05-02.RData')
+# save.image('./Models/Senti_Manual_Uni_New_2018-05-02.RData')
 
 # Uni_Lemma stopwords enhancement 29.04.2018
 # save.image('./Models/Senti_Manual_UniGram_Lemma_Stopwords_2018-04-29.RData')
