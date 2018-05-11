@@ -38,8 +38,8 @@ lapply(packages, require, character.only = TRUE)
 
 # Load BTC 08.05.2018
 BTC <- as.data.frame(read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/1_$BTC_FULL.csv',
-                               locale = locale(encoding = 'latin1'))) %>%
-  select(created_at, status_id, screen_name, user_id, text)
+                              locale = locale(encoding = 'latin1')))
+BTC <- BTC %>% select(created_at, status_id, screen_name, user_id, text)
 
 source('~/GitHub/NextBigCrypto-Senti/2. Preprocessing/1. Preprocessing_TW.R')
 
@@ -112,7 +112,7 @@ BTC.senti.trained <- BTC.senti.trained %>%
 # Convert to each sentiment = column
 BTC.senti.trained <- dcast(BTC.senti.trained, date + countT ~ sentiment.trained , 
                            value.var = 'per')
-colnames(BTC.senti.trained) <- c('date','count.total','negative','neutral','positive')
+colnames(BTC.senti.trained) <- c('date','count','neg','neu','pos')
 
 
 #######################################################################################
@@ -122,8 +122,8 @@ colnames(BTC.senti.trained) <- c('date','count.total','negative','neutral','posi
 ##########################
 # load price dataset
 
-start_date <- min(BTC.senti.final$created)
-end_date <- max(BTC.senti.final$created)
+start_date <- min(BTC.senti.final$date)
+end_date <- max(BTC.senti.final$date)
 token_name <- 'BTC'
 
 price.df <- read_csv("./1. Crawlers/Crypto-Markets_2018-05-07.csv") %>%
@@ -153,9 +153,14 @@ for (i in 2:nrow(price.df)){
 for (i in 2:nrow(price.df)){
   price.df$bin[i] <- ifelse(price.df$diff[i] < 0,'down','up')
 }
-
+# Remove NA
 price.df <- price.df[complete.cases(price.df),]
 
+#
+# FEATURES ENGINEER
+#
+
+# Create 14 price movement features
 price.df$t_1 <- NA # price movement on day t-1
 price.df$t_2 <- NA # price movement on day t-2
 price.df$t_3 <- NA # price movement on day t-3
@@ -203,35 +208,215 @@ for (i in 1:nrow(price.df)){
 }
 
 # Convert to categorical variables
-
 price.df$bin <- as.factor(price.df$bin)
+price.df <- unique(price.df)
 
-price.df$t_1 <- as.factor(price.df$t_1)
-price.df$t_2 <- as.factor(price.df$t_2)
-price.df$t_3 <- as.factor(price.df$t_3)
-price.df$t_4 <- as.factor(price.df$t_4)
-price.df$t_5 <- as.factor(price.df$t_5)
-price.df$t_6 <- as.factor(price.df$t_6)
-price.df$t_7<- as.factor(price.df$t_7)
-price.df$t_8<- as.factor(price.df$t_8)
-price.df$t_9<- as.factor(price.df$t_9)
-price.df$t_10<- as.factor(price.df$t_10)
-price.df$t_11<- as.factor(price.df$t_11)
-price.df$t_12<- as.factor(price.df$t_12)
-price.df$t_13<- as.factor(price.df$t_13)
-price.df$t_14<- as.factor(price.df$t_14)
+#############################################################
+# Sentiment Analysis dataset
 
-# Build a training and testing set.
+# Create 14x4 sentiment features
+BTC.senti.trained$count_1 <- NA # total messages on day t-1
+BTC.senti.trained$count_2 <- NA # total messages on day t-2
+BTC.senti.trained$count_3 <- NA # total messages on day t-3
+BTC.senti.trained$count_4 <- NA # total messages on day t-4
+BTC.senti.trained$count_5 <- NA # total messages on day t-5
+BTC.senti.trained$count_6 <- NA # total messages on day t-6
+BTC.senti.trained$count_7 <- NA # total messages on day t-7
+BTC.senti.trained$count_8 <- NA # total messages on day t-8
+BTC.senti.trained$count_9 <- NA # total messages on day t-9
+BTC.senti.trained$count_10 <- NA # total messages on day t-10
+BTC.senti.trained$count_11 <- NA # total messages on day t-11
+BTC.senti.trained$count_12 <- NA # total messages on day t-12
+BTC.senti.trained$count_13 <- NA # total messages on day t-13
+BTC.senti.trained$count_14 <- NA # total messages on day t-14
+
+for (i in 1:nrow(BTC.senti.trained)){
+  if (i==1){next}
+  BTC.senti.trained$count_1[i] <- BTC.senti.trained$count[i-1]
+  if (i==2){next}
+  BTC.senti.trained$count_2[i] <- BTC.senti.trained$count[i-2]
+  if (i==3){next}
+  BTC.senti.trained$count_3[i] <- BTC.senti.trained$count[i-3]
+  if (i==4){next}
+  BTC.senti.trained$count_4[i] <- BTC.senti.trained$count[i-4]
+  if (i==5){next}
+  BTC.senti.trained$count_5[i] <- BTC.senti.trained$count[i-5]
+  if (i==6){next}
+  BTC.senti.trained$count_6[i] <- BTC.senti.trained$count[i-6]
+  if (i==7){next}
+  BTC.senti.trained$count_7[i] <- BTC.senti.trained$count[i-7]
+  if (i==8){next}
+  BTC.senti.trained$count_8[i] <- BTC.senti.trained$count[i-8]
+  if (i==9){next}
+  BTC.senti.trained$count_9[i] <- BTC.senti.trained$count[i-9]
+  if (i==10){next}
+  BTC.senti.trained$count_10[i] <- BTC.senti.trained$count[i-10]
+  if (i==11){next}
+  BTC.senti.trained$count_11[i] <- BTC.senti.trained$count[i-11]
+  if (i==12){next}
+  BTC.senti.trained$count_12[i] <- BTC.senti.trained$count[i-12]
+  if (i==13){next}
+  BTC.senti.trained$count_13[i] <- BTC.senti.trained$count[i-13]
+  if (i==14){next}
+  BTC.senti.trained$count_14[i] <- BTC.senti.trained$count[i-14]
+}
+
+# Create 14x4 sentiment features POSITIVE
+BTC.senti.trained$pos_1 <- NA # total messages on day t-1
+BTC.senti.trained$pos_2 <- NA # total messages on day t-2
+BTC.senti.trained$pos_3 <- NA # total messages on day t-3
+BTC.senti.trained$pos_4 <- NA # total messages on day t-4
+BTC.senti.trained$pos_5 <- NA # total messages on day t-5
+BTC.senti.trained$pos_6 <- NA # total messages on day t-6
+BTC.senti.trained$pos_7 <- NA # total messages on day t-7
+BTC.senti.trained$pos_8 <- NA # total messages on day t-8
+BTC.senti.trained$pos_9 <- NA # total messages on day t-9
+BTC.senti.trained$pos_10 <- NA # total messages on day t-10
+BTC.senti.trained$pos_11 <- NA # total messages on day t-11
+BTC.senti.trained$pos_12 <- NA # total messages on day t-12
+BTC.senti.trained$pos_13 <- NA # total messages on day t-13
+BTC.senti.trained$pos_14 <- NA # total messages on day t-14
+
+for (i in 1:nrow(BTC.senti.trained)){
+  if (i==1){next}
+  BTC.senti.trained$pos_1[i] <- BTC.senti.trained$pos[i-1]
+  if (i==2){next}
+  BTC.senti.trained$pos_2[i] <- BTC.senti.trained$pos[i-2]
+  if (i==3){next}
+  BTC.senti.trained$pos_3[i] <- BTC.senti.trained$pos[i-3]
+  if (i==4){next}
+  BTC.senti.trained$pos_4[i] <- BTC.senti.trained$pos[i-4]
+  if (i==5){next}
+  BTC.senti.trained$pos_5[i] <- BTC.senti.trained$pos[i-5]
+  if (i==6){next}
+  BTC.senti.trained$pos_6[i] <- BTC.senti.trained$pos[i-6]
+  if (i==7){next}
+  BTC.senti.trained$pos_7[i] <- BTC.senti.trained$pos[i-7]
+  if (i==8){next}
+  BTC.senti.trained$pos_8[i] <- BTC.senti.trained$pos[i-8]
+  if (i==9){next}
+  BTC.senti.trained$pos_9[i] <- BTC.senti.trained$pos[i-9]
+  if (i==10){next}
+  BTC.senti.trained$pos_10[i] <- BTC.senti.trained$pos[i-10]
+  if (i==11){next}
+  BTC.senti.trained$pos_11[i] <- BTC.senti.trained$pos[i-11]
+  if (i==12){next}
+  BTC.senti.trained$pos_12[i] <- BTC.senti.trained$pos[i-12]
+  if (i==13){next}
+  BTC.senti.trained$pos_13[i] <- BTC.senti.trained$pos[i-13]
+  if (i==14){next}
+  BTC.senti.trained$pos_14[i] <- BTC.senti.trained$pos[i-14]
+}
+
+# Create 14x4 sentiment features NEUTRAL
+BTC.senti.trained$neu_1 <- NA # total messages on day t-1
+BTC.senti.trained$neu_2 <- NA # total messages on day t-2
+BTC.senti.trained$neu_3 <- NA # total messages on day t-3
+BTC.senti.trained$neu_4 <- NA # total messages on day t-4
+BTC.senti.trained$neu_5 <- NA # total messages on day t-5
+BTC.senti.trained$neu_6 <- NA # total messages on day t-6
+BTC.senti.trained$neu_7 <- NA # total messages on day t-7
+BTC.senti.trained$neu_8 <- NA # total messages on day t-8
+BTC.senti.trained$neu_9 <- NA # total messages on day t-9
+BTC.senti.trained$neu_10 <- NA # total messages on day t-10
+BTC.senti.trained$neu_11 <- NA # total messages on day t-11
+BTC.senti.trained$neu_12 <- NA # total messages on day t-12
+BTC.senti.trained$neu_13 <- NA # total messages on day t-13
+BTC.senti.trained$neu_14 <- NA # total messages on day t-14
+
+for (i in 1:nrow(BTC.senti.trained)){
+  if (i==1){next}
+  BTC.senti.trained$neu_1[i] <- BTC.senti.trained$neu[i-1]
+  if (i==2){next}
+  BTC.senti.trained$neu_2[i] <- BTC.senti.trained$neu[i-2]
+  if (i==3){next}
+  BTC.senti.trained$neu_3[i] <- BTC.senti.trained$neu[i-3]
+  if (i==4){next}
+  BTC.senti.trained$neu_4[i] <- BTC.senti.trained$neu[i-4]
+  if (i==5){next}
+  BTC.senti.trained$neu_5[i] <- BTC.senti.trained$neu[i-5]
+  if (i==6){next}
+  BTC.senti.trained$neu_6[i] <- BTC.senti.trained$neu[i-6]
+  if (i==7){next}
+  BTC.senti.trained$neu_7[i] <- BTC.senti.trained$neu[i-7]
+  if (i==8){next}
+  BTC.senti.trained$neu_8[i] <- BTC.senti.trained$neu[i-8]
+  if (i==9){next}
+  BTC.senti.trained$neu_9[i] <- BTC.senti.trained$neu[i-9]
+  if (i==10){next}
+  BTC.senti.trained$neu_10[i] <- BTC.senti.trained$neu[i-10]
+  if (i==11){next}
+  BTC.senti.trained$neu_11[i] <- BTC.senti.trained$neu[i-11]
+  if (i==12){next}
+  BTC.senti.trained$neu_12[i] <- BTC.senti.trained$neu[i-12]
+  if (i==13){next}
+  BTC.senti.trained$neu_13[i] <- BTC.senti.trained$neu[i-13]
+  if (i==14){next}
+  BTC.senti.trained$neu_14[i] <- BTC.senti.trained$neu[i-14]
+}
+
+# Create 14x4 sentiment features NEGATIVE
+BTC.senti.trained$neg_1 <- NA # total messages on day t-1
+BTC.senti.trained$neg_2 <- NA # total messages on day t-2
+BTC.senti.trained$neg_3 <- NA # total messages on day t-3
+BTC.senti.trained$neg_4 <- NA # total messages on day t-4
+BTC.senti.trained$neg_5 <- NA # total messages on day t-5
+BTC.senti.trained$neg_6 <- NA # total messages on day t-6
+BTC.senti.trained$neg_7 <- NA # total messages on day t-7
+BTC.senti.trained$neg_8 <- NA # total messages on day t-8
+BTC.senti.trained$neg_9 <- NA # total messages on day t-9
+BTC.senti.trained$neg_10 <- NA # total messages on day t-10
+BTC.senti.trained$neg_11 <- NA # total messages on day t-11
+BTC.senti.trained$neg_12 <- NA # total messages on day t-12
+BTC.senti.trained$neg_13 <- NA # total messages on day t-13
+BTC.senti.trained$neg_14 <- NA # total messages on day t-14
+
+for (i in 1:nrow(BTC.senti.trained)){
+  if (i==1){next}
+  BTC.senti.trained$neg_1[i] <- BTC.senti.trained$neg[i-1]
+  if (i==2){next}
+  BTC.senti.trained$neg_2[i] <- BTC.senti.trained$neg[i-2]
+  if (i==3){next}
+  BTC.senti.trained$neg_3[i] <- BTC.senti.trained$neg[i-3]
+  if (i==4){next}
+  BTC.senti.trained$neg_4[i] <- BTC.senti.trained$neg[i-4]
+  if (i==5){next}
+  BTC.senti.trained$neg_5[i] <- BTC.senti.trained$neg[i-5]
+  if (i==6){next}
+  BTC.senti.trained$neg_6[i] <- BTC.senti.trained$neg[i-6]
+  if (i==7){next}
+  BTC.senti.trained$neg_7[i] <- BTC.senti.trained$neg[i-7]
+  if (i==8){next}
+  BTC.senti.trained$neg_8[i] <- BTC.senti.trained$neg[i-8]
+  if (i==9){next}
+  BTC.senti.trained$neg_9[i] <- BTC.senti.trained$neg[i-9]
+  if (i==10){next}
+  BTC.senti.trained$neg_10[i] <- BTC.senti.trained$neg[i-10]
+  if (i==11){next}
+  BTC.senti.trained$neg_11[i] <- BTC.senti.trained$neg[i-11]
+  if (i==12){next}
+  BTC.senti.trained$neg_12[i] <- BTC.senti.trained$neg[i-12]
+  if (i==13){next}
+  BTC.senti.trained$neg_13[i] <- BTC.senti.trained$neg[i-13]
+  if (i==14){next}
+  BTC.senti.trained$neg_14[i] <- BTC.senti.trained$neg[i-14]
+}
+########################################################################################
+
+# Build a training and testing set ==> split into 14 days with 4 new features/day
 main.df <- inner_join(price.df, BTC.senti.trained, by = 'date')
+main.df <- unique(main.df)
+# Select only relevant features
+main.df <- main.df %>%
+  dplyr::select(-date,-close,-diff,-pricediff)
+# Remove NA 
+main.df <- main.df[complete.cases(main.df),]
 
 # Split random
 set.seed(1908)
 split <- sample.split(main.df$bin, SplitRatio=0.8) #bin is target variable
-train <- subset(main.df[,5:ncol(main.df)], split==TRUE)
-test <- subset(main.df[,5:ncol(main.df)], split==FALSE)
-
-# delete 1st row of test data
-# test <- test[-1,]
+train <- subset(main.df, split==TRUE)
+test <- subset(main.df, split==FALSE)
 
 ##########################################################################################################
 # Function to calculate accuracy/prediction/recall
@@ -338,6 +523,38 @@ metrics <- function(cm) {
                                micro_prf,mcc))
   return(final)
 }
+
+###############################
+#                             #
+#       MAIN MODEL            #
+#                             #
+###############################
+
+####################################################################################
+# Features Importance Analysis
+
+# Decide if a variable is important or not using Boruta
+boruta_output <- Boruta::Boruta(bin ~ ., data = train, doTrace=2)  # perform Boruta search
+boruta_signif <- names(boruta_output$finalDecision[boruta_output$finalDecision %in% c("Confirmed", "Tentative")])  # collect Confirmed and Tentative variables
+print(boruta_signif)  # significant variables
+plot(boruta_output, cex.axis=.7, las=2, xlab="", main="Variable Importance")  # plot variable importance
+
+
+# Stepwise regression
+base.mod <- glm(bin ~ 1 , data= train, family = binomial)  # base intercept only model
+all.mod <- glm(bin ~ . , data= train, family = binomial) # full model with all predictors
+stepMod <- step(base.mod, scope = list(lower = base.mod, upper = all.mod), direction = "both", trace = 0, steps = 1000)  # perform step-wise algorithm
+shortlistedVars <- names(unlist(stepMod[[1]])) # get the shortlisted variable.
+shortlistedVars <- shortlistedVars[!shortlistedVars %in% "(Intercept)"]  # remove intercept 
+print(shortlistedVars)
+
+# Variance importance factor (>2 is multicollinearity)
+VIF <- as.data.frame(car::vif(all.mod))
+
+##############################
+
+# MODELS DEVELOPMENT
+
 ##############################
 # k-fold validation (10)
 train_control <- trainControl(## 10-fold CV
@@ -352,12 +569,16 @@ logitest <- test
 logitrain$bin <- ifelse(logitrain$bin == 'up',1,0)
 logitest$bin <- ifelse(logitest$bin == 'up',1,0)
 
-LogiModel <- glm(bin ~., data = logitrain, family = binomial(link = "logit"))
+LogiModel <- glm(bin ~., 
+                 data = logitrain, 
+                 family = binomial(link = "logit"))
 
 summary(LogiModel)
 
 # Prediction
-prediction.Logi <- predict(LogiModel, newdata= logitest, type = "response")
+prediction.Logi <- predict(LogiModel, 
+                           newdata= logitest[,2:ncol(logitest)], 
+                           type = "response")
 prediction.Logi
 
 # Convert to up/down
@@ -365,34 +586,79 @@ prediction.Logi <- ifelse(prediction.Logi < 0.5,'down','up')
 
 
 cmLogi <- table(test$bin, prediction.Logi)
-metrics(cmLogi) # acc 72%
+metrics(cmLogi) # 59%
 
 confusionMatrix(as.factor(prediction.Logi),test$bin)
 
 ########################################
 # Naive Bayes
-
+set.seed(1234)
 NBayes <- train(bin ~., 
                 data = train, 
                 laplace = 1, 
-                model = "nb",
-                na.action = na.omit,
+                method = "nb",
                 trControl = train_control)
 
-# remove NA observations
-test <- test[-c(1:2),]
+predictionsNB <- predict(NBayes, 
+                         newdata = test[,2:ncol(test)])
 
-NBayes
-
-predictionsNB <- predict(NBayes, newdata = test[,2:ncol(test)])
 cmNB <- table(test$bin, predictionsNB)
 
 confusionMatrix(predictionsNB,test$bin)
 
-metrics(cmNB) # acc 37%
+metrics(cmNB)
 
+########################################
+# Random Forest
+set.seed(1234)
+RF <- train(bin ~.,
+            data = train,
+            method = "rf",
+            trControl = train_control)
 
+predictionsRF <- predict(RF, 
+                         newdata = test[,2:ncol(test)])
+
+cmRF <- table(test$bin, predictionsRF)
+
+confusionMatrix(predictionsRF,test$bin)
+
+metrics(cmRF) 
+
+########################################
+# Support Vector Machine
+set.seed(1234)
+SVM <- train(bin ~.,
+             data = train,
+             method = "svmLinear",
+             trControl = train_control)
+
+predictionsSVM <- predict(SVM, 
+                          newdata = test[,2:ncol(test)])
+
+cmSVM <- table(test$bin, predictionsSVM)
+
+confusionMatrix(predictionsSVM,test$bin)
+
+metrics(cmSVM)
+
+########################################
+# C5.0 tree
+set.seed(1234)
+C5.0 <- train(bin ~.,
+              data = train,
+              method = "C5.0",
+              trControl = train_control)
+
+predictionsC50 <- predict(C5.0, 
+                          newdata = test[,2:ncol(test)])
+
+cmC50 <- table(test$bin, predictionsC50)
+
+confusionMatrix(predictionsC50,test$bin)
+
+metrics(cmC50)
 
 # Temporary save
-save.image('~/GitHub/NextBigCrypto-Senti/Models/SAT_v1_090518.RData')
-# load('~/GitHub/NextBigCrypto-Senti/Models/SAT_v1_080518.RData')
+save.image('~/GitHub/NextBigCrypto-Senti/Models/SAT_v1_110518.RData')
+# load('~/GitHub/NextBigCrypto-Senti/Models/SAT_v1_100518.RData')

@@ -212,7 +212,7 @@ train_control <- trainControl(## 10-fold CV
 
 #########################################################
 # Multinomial logistic regression (baseline model)
-
+set.seed(1234)
 # Set the reference group for bin to be 1
 trainSparse$sentiment <- relevel(trainSparse$sentiment, ref=1)
 
@@ -231,9 +231,9 @@ metrics(cm.mlr) # Uni acc 58%
 
 ##############################################################
 # Build a CART classification regression tree model on the training set
-
+set.seed(1234)
 tweetCART_kfold <- train(sentiment~., data = trainSparse, 
-                         model = "rpart", trControl = train_control)
+                         method = "rpart", trControl = train_control)
 
 predictCART_kfold <- predict(tweetCART_kfold, newdata = testSparse[,2:ncol(testSparse)])
 cmCART_kfold <- table(testSparse$sentiment, predictCART_kfold)
@@ -241,9 +241,9 @@ metrics(cmCART_kfold) # Uni acc 62% -> 65%
 
 #####################################################
 # C5.0 29.04.18
-
+set.seed(1234)
 C5.0model <- train(sentiment~., data = trainSparse, 
-                   model = "C5.0", trControl = train_control)
+                   method = "C5.0", trControl = train_control)
 
 predict.C50 <- predict(C5.0model, newdata = testSparse[,2:ncol(testSparse)])
 cm.C50 <- table(testSparse$sentiment, predict.C50)
@@ -251,7 +251,8 @@ metrics(cm.C50) # Uni-Lemma 66% acc
 
 #####################################################
 # Random Forest
-tweetRF <- train(sentiment ~ ., data=trainSparse, model = "rf", trControl = train_control)
+set.seed(1234)
+tweetRF <- train(sentiment ~ ., data=trainSparse, method = "rf", trControl = train_control)
 
 predictRF <- predict(tweetRF, newdata = testSparse[,2:ncol(testSparse)])
 
@@ -261,8 +262,8 @@ metrics(cmRF) # Uni - acc 62% -> 66%
 
 ###############################################
 # SVM
-
-SVM_kfold <-  train(sentiment ~ ., data=trainSparse, model = "svm", trControl=train_control)
+set.seed(1234)
+SVM_kfold <-  train(sentiment ~ ., data=trainSparse, method = "svmLinear", trControl=train_control)
 
 predictSVM_kfold <- predict(SVM_kfold, newdata = testSparse[,2:ncol(testSparse)])
 
@@ -272,13 +273,13 @@ metrics(cmSVM_kfold) # Uni acc 63%
 
 #############################################################
 # Naive Bayes
-
-NBayes <- train(sentiment ~., data = trainSparse, laplace = 1, model = "nb", trControl = train_control)
+set.seed(1234)
+NBayes <- train(sentiment ~., data = trainSparse, laplace = 3, method = "nb", trControl = train_control)
 
 predictionsNB <- predict(NBayes,  newdata = testSparse[,2:ncol(testSparse)])
 
 cmNB <- table(testSparse$sentiment, predictionsNB)
-
+confusionMatrix(testSparse$sentiment,predictionsNB)
 metrics(cmNB) # Uni - acc 63%
 
 ###############################################
@@ -369,7 +370,7 @@ for (i in 1:nrow(finaldf)){
 
 cmMAJOR <- table(finaldf$Sentiment, finaldf$Major)
 
-metrics(cmMAJOR) # Uni - acc 62%
+metrics(cmMAJOR) # Uni - acc 68%
 
 ############################################################################################################
 ####################
@@ -527,7 +528,7 @@ cmMAJOR.packages <- table(major.packages$Sentiment, major.packages$Major)
 
 metrics(cmMAJOR.packages) # acc 49%
 
-save.image('./Models/Senti_Manual_Uni_TFIDF_080518.RData')
+save.image('./Models/Senti_Manual_Uni_TFIDF_100518.RData')
 #load('./Models/Senti_Manual_Uni_TFIDF_working.RData')
 # Uni_Lemma_new pipeline 02.05.2018
 # save.image('./Models/Senti_Manual_Uni_New_2018-05-02.RData')

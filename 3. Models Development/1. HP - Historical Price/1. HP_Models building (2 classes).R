@@ -1,8 +1,11 @@
 # Prepare dataset for building historical price model (HP)
 
+# Feature Selection Methods
+# http://r-statistics.co/Variable-Selection-and-Importance-With-R.html
+
 # clear the environment
 rm(list= ls())
-
+gc()
 # load packages and set options
 options(stringsAsFactors = FALSE)
 
@@ -28,7 +31,7 @@ if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
 lapply(packages, require, character.only = TRUE)
 
 ############################
-token_name <- 'BTC'
+token_name <- 'ETH'
 
 #start_date <- as.Date(min(tweet.df$created_at))
 
@@ -49,63 +52,9 @@ for (i in 2:nrow(price.df)){
   price.df$pricediff[i] <- price.df$close[i] - price.df$close[i-1]
 }
 
-############
-# Exploratory
-dat <- as.data.frame(price.df$pricediff)
-dat <- cbind(price.df$date,dat, price.df$close)
-colnames(dat) <- c('date', 'pricediff','close')
-
-# Histogram overlaid with kernel density curve
-# ggplot(dat, aes(x=pricediff)) + 
-#   geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
-#                  binwidth=.5,
-#                  colour="black", fill="white") +
-#   geom_density(alpha=.2, fill="#FF6666")  # Overlay with transparent density plot
-# 
-# ggplot(dat, aes(x=pricediff)) +
-#   geom_histogram(binwidth=.5, colour="black", fill="white") +
-#   geom_vline(aes(xintercept=mean(diff.abs, na.rm=T)),   # Ignore NA values for mean
-#              color="red", linetype="dashed", size=1)
-
-# Density curve
-ggplot(dat , aes(x=pricediff)) +
-  geom_density(fill='lightblue') +
-  geom_rug() +
-  labs(x='Differences between close prices')
-
 ###########
 # BINNING #
 ###########
-
-hist(dat$pricediff)
-
-dat$diff <- NA
-for (i in 2:nrow(dat)){
-  dat$diff[i] <- round(((dat$close[i]-dat$close[i-1])/dat$close[i])*100,2)
-}
-
-# Split into 4 different bins: strong up/ up / down / strong down
-# dat$bin <- as.numeric(cut2(dat$pricediff, g=4))
-
-# < 5% is normal >=5% is "strong"
-
-hist(dat$diff, xlab = 'Percent differences between close prices',
-     main = 'Histogram of percentage differences between $BTC close prices')
-
-# Binning process
-for (i in 2:nrow(dat)){
-  dat$bin[i] <- ifelse(dat$diff[i] < -5,'strong down',
-                       ifelse(dat$diff[i] < 0 & dat$diff[i] >= -5,'down',
-                              ifelse(dat$diff[i] > 0 & dat$diff[i] <= 5,'up','strong up')))
-}
-
-
-# check distribution
-dat %>% group_by(bin) %>% tally
-dat <- dat[complete.cases(dat),]
-
-###############################
-# Preparation
 
 price.df$diff <- NA
 price.df$bin <- NA
@@ -115,18 +64,12 @@ for (i in 2:nrow(price.df)){
   price.df$diff[i] <- round(((price.df$close[i]-price.df$close[i-1])/price.df$close[i])*100,2)
 }
 
-# Binning process
-# for (i in 2:nrow(price.df)){
-#   price.df$bin[i] <- ifelse(price.df$diff[i] < -5,'strong down',
-#                             ifelse(price.df$diff[i] < 0 & price.df$diff[i] >= -5,'down',
-#                                    ifelse(price.df$diff[i] > 0 & price.df$diff[i] <= 5,'up','strong up')))
-# }
-
 # This version only split 2 classes
 for (i in 2:nrow(price.df)){
   price.df$bin[i] <- ifelse(price.df$diff[i] < 0,'down','up')
   }
 
+# Remove all NAs
 price.df <- price.df[complete.cases(price.df),]
 
 price.df$t_1 <- NA # price movement on day t-1
@@ -180,42 +123,19 @@ for (i in 1:nrow(price.df)){
 
 price.df$bin <- as.factor(price.df$bin)
 
-price.df$t_1 <- as.factor(price.df$t_1)
-price.df$t_2 <- as.factor(price.df$t_2)
-price.df$t_3 <- as.factor(price.df$t_3)
-price.df$t_4 <- as.factor(price.df$t_4)
-price.df$t_5 <- as.factor(price.df$t_5)
-price.df$t_6 <- as.factor(price.df$t_6)
-price.df$t_7<- as.factor(price.df$t_7)
-price.df$t_8<- as.factor(price.df$t_8)
-price.df$t_9<- as.factor(price.df$t_9)
-price.df$t_10<- as.factor(price.df$t_10)
-price.df$t_11<- as.factor(price.df$t_11)
-price.df$t_12<- as.factor(price.df$t_12)
-price.df$t_13<- as.factor(price.df$t_13)
-price.df$t_14<- as.factor(price.df$t_14)
-
 # Build a training and testing set.
-set.seed(1908)
-
-main.df <- price.df[c('date','bin','t_1','t_2','t_3','t_4','t_5',
+main.df <- price.df[c('bin','t_1','t_2','t_3','t_4','t_5',
                       't_6','t_7','t_8','t_9','t_10',
                       't_11','t_12','t_13','t_14')]
 
+# Remove NA 
+main.df <- main.df[complete.cases(main.df),]
+main.df <- unique(main.df)
 # Split random
-
-# split <- sample.split(main.df$bin, SplitRatio=0.8) #bin is target variable
-# train <- subset(main.df, split==TRUE)
-# test <- subset(main.df, split==FALSE)
-# delete 1st row of test data
-# test <- test[-1,]
-
-# Split according to timeline
-train <- main.df %>% filter(date <= '2018-02-28')
-train <- train[,-1]
-
-test <- main.df %>% filter(date > '2018-02-28')
-test <- test[,-1]
+set.seed(1908)
+split <- sample.split(main.df$bin, SplitRatio=0.8) #bin is target variable
+train <- subset(main.df, split==TRUE)
+test <- subset(main.df, split==FALSE)
 
 ##########################################################################################################
 # Function to calculate accuracy/prediction/recall
@@ -322,6 +242,32 @@ metrics <- function(cm) {
                                micro_prf,mcc))
   return(final)
 }
+
+####################################################################################
+# Features Importance Analysis
+
+# Decide if a variable is important or not using Boruta
+boruta_output <- Boruta::Boruta(bin ~ ., data = train, doTrace=2)  # perform Boruta search
+boruta_signif <- names(boruta_output$finalDecision[boruta_output$finalDecision %in% c("Confirmed", "Tentative")])  # collect Confirmed and Tentative variables
+print(boruta_signif)  # significant variables
+plot(boruta_output, cex.axis=.7, las=2, xlab="", main="Variable Importance")  # plot variable importance
+
+
+# Stepwise regression
+base.mod <- glm(bin ~ 1 , data= train, family = binomial)  # base intercept only model
+all.mod <- glm(bin ~ . , data= train, family = binomial) # full model with all predictors
+stepMod <- step(base.mod, scope = list(lower = base.mod, upper = all.mod), direction = "both", trace = 0, steps = 1000)  # perform step-wise algorithm
+shortlistedVars <- names(unlist(stepMod[[1]])) # get the shortlisted variable.
+shortlistedVars <- shortlistedVars[!shortlistedVars %in% "(Intercept)"]  # remove intercept 
+print(shortlistedVars)
+
+# Variance importance factor (>2 is multicollinearity)
+car::vif(all.mod)
+
+##############################
+
+# MODELS DEVELOPMENT
+
 ##############################
 # k-fold validation (10)
 train_control <- trainControl(## 10-fold CV
@@ -336,12 +282,16 @@ logitest <- test
 logitrain$bin <- ifelse(logitrain$bin == 'up',1,0)
 logitest$bin <- ifelse(logitest$bin == 'up',1,0)
 
-LogiModel <- glm(bin ~., data = logitrain, family = binomial(link = "logit"))
+LogiModel <- glm(bin ~., 
+                 data = logitrain, 
+                 family = binomial(link = "logit"))
 
 summary(LogiModel)
 
 # Prediction
-prediction.Logi <- predict(LogiModel, newdata= logitest[,2:ncol(logitest)], type = "response")
+prediction.Logi <- predict(LogiModel, 
+                           newdata= logitest[,2:ncol(logitest)], 
+                           type = "response")
 prediction.Logi
 
 # Convert to up/down
@@ -349,29 +299,113 @@ prediction.Logi <- ifelse(prediction.Logi < 0.5,'down','up')
 
 
 cmLogi <- table(test$bin, prediction.Logi)
-metrics(cmLogi) # 46%
+metrics(cmLogi) 
 
-confusionMatrix(prediction.Logi,test$bin)
+confusionMatrix(as.factor(prediction.Logi),test$bin)
 
 ########################################
 # Naive Bayes
-
+set.seed(1234)
 NBayes <- train(bin ~., 
                 data = train, 
                 laplace = 1, 
-                model = "nb",
-                na.action = na.exclude,
+                method = "nb",
                 trControl = train_control)
 
-predictionsNB <- predict(NBayes, newdata = test[,2:ncol(test)])
+predictionsNB <- predict(NBayes, 
+                         newdata = test[,2:ncol(test)])
+
 cmNB <- table(test$bin, predictionsNB)
 
 confusionMatrix(predictionsNB,test$bin)
 
-metrics(cmNB) # acc 37%
+metrics(cmNB)
+
+########################################
+# Random Forest
+set.seed(1234)
+RF <- train(bin ~.,
+            data = train,
+            method = "rf",
+            trControl = train_control)
+
+predictionsRF <- predict(RF, 
+                         newdata = test[,2:ncol(test)])
+
+cmRF <- table(test$bin, predictionsRF)
+
+confusionMatrix(predictionsRF,test$bin)
+
+metrics(cmRF)
+
+########################################
+# Support Vector Machine
+set.seed(1234)
+SVM <- train(bin ~.,
+            data = train,
+            method = "svmLinear",
+            trControl = train_control)
+
+predictionsSVM <- predict(SVM, 
+                         newdata = test[,2:ncol(test)])
+
+cmSVM <- table(test$bin, predictionsSVM)
+
+confusionMatrix(predictionsSVM,test$bin)
+
+metrics(cmSVM)
+
+########################################
+# C5.0 tree
+set.seed(1234)
+C5.0 <- train(bin ~.,
+             data = train,
+             method = "C5.0",
+             trControl = train_control)
+
+predictionsC50 <- predict(C5.0, 
+                          newdata = test[,2:ncol(test)])
+
+cmC50 <- table(test$bin, predictionsC50)
+
+confusionMatrix(predictionsC50,test$bin)
+
+metrics(cmC50) 
+
+####################################################################################################################
+# RFE RF
+set.seed(1908)
+
+ctrl <- rfeControl(functions = rfFuncs, # random forest
+                   method = "cv",
+                   number = 10,
+                   verbose = FALSE)
+
+# convert dependent variables to factor vector
+y <- train[,2]
+y <- as.vector(unlist(y))
+y <- as.factor(y)
+
+# apply rfe
+rfProfile <- rfe(x = train[,2:ncol(train)], # features
+                 y,
+                 sizes = 1:10,   # retain from 1-8 features
+                 rfeControl =  ctrl)
+
+# summary of rfe
+rfProfile
+# get predictors
+predictors(rfProfile)
+
+rfProfile$fit
+head(rfProfile$resample)
+
+# Ploting rfe progress
+trellis.par.set(caretTheme())
+plot(rfProfile, type = c("g", "o"), main = 'RFE for Random Forest')
 
 ##########################################################
-# Recursive feature elimination (via caret package)
+# Recursive feature elimination NB (via caret package)
 set.seed(1908)
 
 ctrl <- rfeControl(functions = nbFuncs, #naive bayes
@@ -387,7 +421,7 @@ y <- as.factor(y)
 # apply rfe
 nbProfile <- rfe(x = train[,2:ncol(train)], # features
                  y,
-                 sizes = 1:8,   # retain from 1-8 features
+                 sizes = 1:10,   # retain from 1-8 features
                  rfeControl =  ctrl)
 
 # summary of rfe
@@ -409,7 +443,7 @@ newNB_rfe <- predict(nbProfile, test[,2:ncol(test)])
 newNB_rfe
 
 cmNB_rfe1 <- table(test$bin,newNB_rfe$pred)
-metrics(cmNB_rfe1) # acc up to 46%
+metrics(cmNB_rfe1) # acc up to 57%
 
 confusionMatrix(newNB_rfe$pred,test$bin)
 
@@ -421,7 +455,7 @@ f <- as.formula(paste("bin", paste(nbProfile$optVariables, collapse=" + "), sep=
 set.seed(1908)
 NBayes_rfe <- train(f,
                     data = train,
-                    laplace = 1, model = "nb",
+                    laplace = 1, method = "nb",
                     na.action = na.exclude,
                     trControl = train_control)
 
@@ -429,7 +463,7 @@ predictionsNB_rfe <- predict(NBayes_rfe, newdata=test[,2:ncol(test)])
 
 cmNB_rfe2 <- table(test$bin, predictionsNB_rfe)
 
-metrics(cmNB_rfe2) # acc 46%
+metrics(cmNB_rfe2) # acc 58%
 confusionMatrix(predictionsNB_rfe,test$bin)
 ##########################################
 
