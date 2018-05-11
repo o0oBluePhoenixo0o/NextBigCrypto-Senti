@@ -33,10 +33,10 @@ Previous researches have shown that securities and other financial instruments m
 
 ![Preprocessing Pipeline](https://github.com/o0oBluePhoenixo0o/NextBigCrypto-Senti/blob/master/img/Preprocessingv3.JPG)
 
--- Implement "Twitter bot detection" module (utilize package "botrnot")
--- Custom abbreviations dictionary for translating popular acronyms / slangs on social media
--- Enhance stop-words dictionary (exclude price movements related words / tokens affiliated removal)
--- Lemmatization before tokenization
+ - - Implement "Twitter bot detection" module (utilize package "botrnot")
+ - - Custom abbreviations dictionary for translating popular acronyms / slangs on social media
+ - - Enhance stop-words dictionary (exclude price movements related words / tokens affiliated removal)
+ - - Lemmatization before tokenization
 
 - **HP** model with accuracy ~ 55%
 - **SAT** model with accuracy ~ 70% (improvement from sentiment features from the past 14 days)
