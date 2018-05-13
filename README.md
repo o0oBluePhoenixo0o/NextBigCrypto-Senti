@@ -23,6 +23,21 @@ Previous researches have shown that securities and other financial instruments m
 - Complete framework for evaluation models. Contain 9 types of models:
 
 ![Experiment Design](https://github.com/o0oBluePhoenixo0o/NextBigCrypto-Senti/blob/master/img/Experiment%20Design.JPG)
-- Complete "manual dataset" construction (3000 observations labeled)
-- Finalize sentiment analysis on manual label dataset with evaluation (trained models vs prebuilt models)
-- Historical Price model version 1 complete as baseline (acc 46% with Recursive Feature Eliminations)
+
+- Complete "manual dataset" construction (~3200 observations labeled)
+- Finalize sentiment analysis on manual label dataset with evaluation (trained models vs packages)
+- Historical Price (HP) model version 1 complete as baseline (acc 46% with Recursive Feature Eliminations)
+
+## May 18
+- Revisit pre-processing pipeline:
+
+![Preprocessing Pipeline](https://github.com/o0oBluePhoenixo0o/NextBigCrypto-Senti/blob/master/img/Preprocessingv3.JPG)
+
+ - - Implement "Twitter bot detection" module (utilize package "botrnot")
+ - - Custom abbreviations dictionary for translating popular acronyms / slangs on social media
+ - - Enhance stop-words dictionary (exclude price movements related words / tokens affiliated removal)
+ - - Lemmatization before tokenization
+
+- **HP** model with accuracy ~ 55%
+- **SAT** model with accuracy ~ 70% (improvement from sentiment features from the past 14 days)
+- **SAP** model with accuracy ~ 58% (not much compare to SAT)
