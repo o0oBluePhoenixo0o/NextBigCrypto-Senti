@@ -181,246 +181,36 @@ for (i in 2:nrow(price.df)){
 # FEATURES ENGINEER
 #
 price.df <- price.df[complete.cases(price.df),]
-
-price.df$t_1 <- NA # price movement on day t-1
-price.df$t_2 <- NA # price movement on day t-2
-price.df$t_3 <- NA # price movement on day t-3
-price.df$t_4 <- NA # price movement on day t-4
-price.df$t_5 <- NA # price movement on day t-5
-price.df$t_6 <- NA # price movement on day t-6
-price.df$t_7 <- NA # price movement on day t-7
-price.df$t_8 <- NA # price movement on day t-8
-price.df$t_9 <- NA # price movement on day t-9
-price.df$t_10 <- NA # price movement on day t-10
-price.df$t_11 <- NA # price movement on day t-11
-price.df$t_12 <- NA # price movement on day t-12
-price.df$t_13 <- NA # price movement on day t-13
-price.df$t_14 <- NA # price movement on day t-14
-
-for (i in 1:nrow(price.df)){
-  if (i==1){next}
-  price.df$t_1[i] <- price.df$bin[i-1]
-  if (i==2){next}
-  price.df$t_2[i] <- price.df$bin[i-2]
-  if (i==3){next}
-  price.df$t_3[i] <- price.df$bin[i-3]
-  if (i==4){next}
-  price.df$t_4[i] <- price.df$bin[i-4]
-  if (i==5){next}
-  price.df$t_5[i] <- price.df$bin[i-5]
-  if (i==6){next}
-  price.df$t_6[i] <- price.df$bin[i-6]
-  if (i==7){next}
-  price.df$t_7[i] <- price.df$bin[i-7]
-  if (i==8){next}
-  price.df$t_8[i] <- price.df$bin[i-8]
-  if (i==9){next}
-  price.df$t_9[i] <- price.df$bin[i-9]
-  if (i==10){next}
-  price.df$t_10[i] <- price.df$bin[i-10]
-  if (i==11){next}
-  price.df$t_11[i] <- price.df$bin[i-11]
-  if (i==12){next}
-  price.df$t_12[i] <- price.df$bin[i-12]
-  if (i==13){next}
-  price.df$t_13[i] <- price.df$bin[i-13]
-  if (i==14){next}
-  price.df$t_14[i] <- price.df$bin[i-14]
+# Generate columns through loop
+for (i in 1:14){
+  eval(parse(text = paste0('price.df$t_', i,' <- NA')))
 }
 
+for (i in 1:nrow(price.df)){
+  for (j in 1:x){
+    eval(parse(text = paste0('price.df$t_', j,' <- as.factor(lag(price.df$bin,',j,'))')))
+  }
+}
 # Convert to categorical variables
 price.df$bin <- as.factor(price.df$bin)
 price.df <- unique(price.df)
-
 #############################################################
 # Sentiment Analysis dataset
 
-# Create 14x4 sentiment features
-BTC.senti.packages$count_1 <- NA # total messages on day t-1
-BTC.senti.packages$count_2 <- NA # total messages on day t-2
-BTC.senti.packages$count_3 <- NA # total messages on day t-3
-BTC.senti.packages$count_4 <- NA # total messages on day t-4
-BTC.senti.packages$count_5 <- NA # total messages on day t-5
-BTC.senti.packages$count_6 <- NA # total messages on day t-6
-BTC.senti.packages$count_7 <- NA # total messages on day t-7
-BTC.senti.packages$count_8 <- NA # total messages on day t-8
-BTC.senti.packages$count_9 <- NA # total messages on day t-9
-BTC.senti.packages$count_10 <- NA # total messages on day t-10
-BTC.senti.packages$count_11 <- NA # total messages on day t-11
-BTC.senti.packages$count_12 <- NA # total messages on day t-12
-BTC.senti.packages$count_13 <- NA # total messages on day t-13
-BTC.senti.packages$count_14 <- NA # total messages on day t-14
+name <- c('count','pos','neg','neu')
 
-for (i in 1:nrow(BTC.senti.packages)){
-  if (i==1){next}
-  BTC.senti.packages$count_1[i] <- BTC.senti.packages$count[i-1]
-  if (i==2){next}
-  BTC.senti.packages$count_2[i] <- BTC.senti.packages$count[i-2]
-  if (i==3){next}
-  BTC.senti.packages$count_3[i] <- BTC.senti.packages$count[i-3]
-  if (i==4){next}
-  BTC.senti.packages$count_4[i] <- BTC.senti.packages$count[i-4]
-  if (i==5){next}
-  BTC.senti.packages$count_5[i] <- BTC.senti.packages$count[i-5]
-  if (i==6){next}
-  BTC.senti.packages$count_6[i] <- BTC.senti.packages$count[i-6]
-  if (i==7){next}
-  BTC.senti.packages$count_7[i] <- BTC.senti.packages$count[i-7]
-  if (i==8){next}
-  BTC.senti.packages$count_8[i] <- BTC.senti.packages$count[i-8]
-  if (i==9){next}
-  BTC.senti.packages$count_9[i] <- BTC.senti.packages$count[i-9]
-  if (i==10){next}
-  BTC.senti.packages$count_10[i] <- BTC.senti.packages$count[i-10]
-  if (i==11){next}
-  BTC.senti.packages$count_11[i] <- BTC.senti.packages$count[i-11]
-  if (i==12){next}
-  BTC.senti.packages$count_12[i] <- BTC.senti.packages$count[i-12]
-  if (i==13){next}
-  BTC.senti.packages$count_13[i] <- BTC.senti.packages$count[i-13]
-  if (i==14){next}
-  BTC.senti.packages$count_14[i] <- BTC.senti.packages$count[i-14]
-}
-
-# Create 14x4 sentiment features POSITIVE
-BTC.senti.packages$pos_1 <- NA # total messages on day t-1
-BTC.senti.packages$pos_2 <- NA # total messages on day t-2
-BTC.senti.packages$pos_3 <- NA # total messages on day t-3
-BTC.senti.packages$pos_4 <- NA # total messages on day t-4
-BTC.senti.packages$pos_5 <- NA # total messages on day t-5
-BTC.senti.packages$pos_6 <- NA # total messages on day t-6
-BTC.senti.packages$pos_7 <- NA # total messages on day t-7
-BTC.senti.packages$pos_8 <- NA # total messages on day t-8
-BTC.senti.packages$pos_9 <- NA # total messages on day t-9
-BTC.senti.packages$pos_10 <- NA # total messages on day t-10
-BTC.senti.packages$pos_11 <- NA # total messages on day t-11
-BTC.senti.packages$pos_12 <- NA # total messages on day t-12
-BTC.senti.packages$pos_13 <- NA # total messages on day t-13
-BTC.senti.packages$pos_14 <- NA # total messages on day t-14
-
-for (i in 1:nrow(BTC.senti.packages)){
-  if (i==1){next}
-  BTC.senti.packages$pos_1[i] <- BTC.senti.packages$pos[i-1]
-  if (i==2){next}
-  BTC.senti.packages$pos_2[i] <- BTC.senti.packages$pos[i-2]
-  if (i==3){next}
-  BTC.senti.packages$pos_3[i] <- BTC.senti.packages$pos[i-3]
-  if (i==4){next}
-  BTC.senti.packages$pos_4[i] <- BTC.senti.packages$pos[i-4]
-  if (i==5){next}
-  BTC.senti.packages$pos_5[i] <- BTC.senti.packages$pos[i-5]
-  if (i==6){next}
-  BTC.senti.packages$pos_6[i] <- BTC.senti.packages$pos[i-6]
-  if (i==7){next}
-  BTC.senti.packages$pos_7[i] <- BTC.senti.packages$pos[i-7]
-  if (i==8){next}
-  BTC.senti.packages$pos_8[i] <- BTC.senti.packages$pos[i-8]
-  if (i==9){next}
-  BTC.senti.packages$pos_9[i] <- BTC.senti.packages$pos[i-9]
-  if (i==10){next}
-  BTC.senti.packages$pos_10[i] <- BTC.senti.packages$pos[i-10]
-  if (i==11){next}
-  BTC.senti.packages$pos_11[i] <- BTC.senti.packages$pos[i-11]
-  if (i==12){next}
-  BTC.senti.packages$pos_12[i] <- BTC.senti.packages$pos[i-12]
-  if (i==13){next}
-  BTC.senti.packages$pos_13[i] <- BTC.senti.packages$pos[i-13]
-  if (i==14){next}
-  BTC.senti.packages$pos_14[i] <- BTC.senti.packages$pos[i-14]
-}
-
-# Create 14x4 sentiment features NEUTRAL
-BTC.senti.packages$neu_1 <- NA # total messages on day t-1
-BTC.senti.packages$neu_2 <- NA # total messages on day t-2
-BTC.senti.packages$neu_3 <- NA # total messages on day t-3
-BTC.senti.packages$neu_4 <- NA # total messages on day t-4
-BTC.senti.packages$neu_5 <- NA # total messages on day t-5
-BTC.senti.packages$neu_6 <- NA # total messages on day t-6
-BTC.senti.packages$neu_7 <- NA # total messages on day t-7
-BTC.senti.packages$neu_8 <- NA # total messages on day t-8
-BTC.senti.packages$neu_9 <- NA # total messages on day t-9
-BTC.senti.packages$neu_10 <- NA # total messages on day t-10
-BTC.senti.packages$neu_11 <- NA # total messages on day t-11
-BTC.senti.packages$neu_12 <- NA # total messages on day t-12
-BTC.senti.packages$neu_13 <- NA # total messages on day t-13
-BTC.senti.packages$neu_14 <- NA # total messages on day t-14
-
-for (i in 1:nrow(BTC.senti.packages)){
-  if (i==1){next}
-  BTC.senti.packages$neu_1[i] <- BTC.senti.packages$neu[i-1]
-  if (i==2){next}
-  BTC.senti.packages$neu_2[i] <- BTC.senti.packages$neu[i-2]
-  if (i==3){next}
-  BTC.senti.packages$neu_3[i] <- BTC.senti.packages$neu[i-3]
-  if (i==4){next}
-  BTC.senti.packages$neu_4[i] <- BTC.senti.packages$neu[i-4]
-  if (i==5){next}
-  BTC.senti.packages$neu_5[i] <- BTC.senti.packages$neu[i-5]
-  if (i==6){next}
-  BTC.senti.packages$neu_6[i] <- BTC.senti.packages$neu[i-6]
-  if (i==7){next}
-  BTC.senti.packages$neu_7[i] <- BTC.senti.packages$neu[i-7]
-  if (i==8){next}
-  BTC.senti.packages$neu_8[i] <- BTC.senti.packages$neu[i-8]
-  if (i==9){next}
-  BTC.senti.packages$neu_9[i] <- BTC.senti.packages$neu[i-9]
-  if (i==10){next}
-  BTC.senti.packages$neu_10[i] <- BTC.senti.packages$neu[i-10]
-  if (i==11){next}
-  BTC.senti.packages$neu_11[i] <- BTC.senti.packages$neu[i-11]
-  if (i==12){next}
-  BTC.senti.packages$neu_12[i] <- BTC.senti.packages$neu[i-12]
-  if (i==13){next}
-  BTC.senti.packages$neu_13[i] <- BTC.senti.packages$neu[i-13]
-  if (i==14){next}
-  BTC.senti.packages$neu_14[i] <- BTC.senti.packages$neu[i-14]
-}
-
-# Create 14x4 sentiment features NEGATIVE
-BTC.senti.packages$neg_1 <- NA # total messages on day t-1
-BTC.senti.packages$neg_2 <- NA # total messages on day t-2
-BTC.senti.packages$neg_3 <- NA # total messages on day t-3
-BTC.senti.packages$neg_4 <- NA # total messages on day t-4
-BTC.senti.packages$neg_5 <- NA # total messages on day t-5
-BTC.senti.packages$neg_6 <- NA # total messages on day t-6
-BTC.senti.packages$neg_7 <- NA # total messages on day t-7
-BTC.senti.packages$neg_8 <- NA # total messages on day t-8
-BTC.senti.packages$neg_9 <- NA # total messages on day t-9
-BTC.senti.packages$neg_10 <- NA # total messages on day t-10
-BTC.senti.packages$neg_11 <- NA # total messages on day t-11
-BTC.senti.packages$neg_12 <- NA # total messages on day t-12
-BTC.senti.packages$neg_13 <- NA # total messages on day t-13
-BTC.senti.packages$neg_14 <- NA # total messages on day t-14
-
-for (i in 1:nrow(BTC.senti.packages)){
-  if (i==1){next}
-  BTC.senti.packages$neg_1[i] <- BTC.senti.packages$neg[i-1]
-  if (i==2){next}
-  BTC.senti.packages$neg_2[i] <- BTC.senti.packages$neg[i-2]
-  if (i==3){next}
-  BTC.senti.packages$neg_3[i] <- BTC.senti.packages$neg[i-3]
-  if (i==4){next}
-  BTC.senti.packages$neg_4[i] <- BTC.senti.packages$neg[i-4]
-  if (i==5){next}
-  BTC.senti.packages$neg_5[i] <- BTC.senti.packages$neg[i-5]
-  if (i==6){next}
-  BTC.senti.packages$neg_6[i] <- BTC.senti.packages$neg[i-6]
-  if (i==7){next}
-  BTC.senti.packages$neg_7[i] <- BTC.senti.packages$neg[i-7]
-  if (i==8){next}
-  BTC.senti.packages$neg_8[i] <- BTC.senti.packages$neg[i-8]
-  if (i==9){next}
-  BTC.senti.packages$neg_9[i] <- BTC.senti.packages$neg[i-9]
-  if (i==10){next}
-  BTC.senti.packages$neg_10[i] <- BTC.senti.packages$neg[i-10]
-  if (i==11){next}
-  BTC.senti.packages$neg_11[i] <- BTC.senti.packages$neg[i-11]
-  if (i==12){next}
-  BTC.senti.packages$neg_12[i] <- BTC.senti.packages$neg[i-12]
-  if (i==13){next}
-  BTC.senti.packages$neg_13[i] <- BTC.senti.packages$neg[i-13]
-  if (i==14){next}
-  BTC.senti.packages$neg_14[i] <- BTC.senti.packages$neg[i-14]
+for (k in 1:length(name)){
+  # Create 14x4 sentiment features
+  # Generate columns through loop
+  for (i in 1:x){
+    eval(parse(text = paste0('BTC.senti.trained$,',name[k],'_', i,' <- NA')))
+  }
+  
+  for (i in 1:nrow(price.df)){
+    for (j in 1:x){
+      eval(parse(text = paste0('BTC.senti.trained$,',name[k],'_', j,' <- lag(BTC.senti.trained$,',name[k],'_',j,')')))
+    }
+  }
 }
 
 # Build a training and testing set.

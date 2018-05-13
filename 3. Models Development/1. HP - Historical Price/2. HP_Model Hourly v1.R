@@ -1,9 +1,12 @@
-# Building Sentiment Anallysis - Trained model 23.04.2018
+# Prepare dataset for building historical price model (HP)
+# with pricing at 12hr mark
+
+# Feature Selection Methods
+# http://r-statistics.co/Variable-Selection-and-Importance-With-R.html
 
 # clear the environment
 rm(list= ls())
-# rm(list=setdiff(ls(), c("BTC.senti","BTC.senti.done"))) #remove everything except BTC.clean
-
+gc()
 # load packages and set options
 options(stringsAsFactors = FALSE)
 
@@ -14,121 +17,41 @@ setwd("~/GitHub/NextBigCrypto-Senti/")
 packages <- c("readr", #read data
               "lubridate", #date time conversion
               "dplyr", #date manipulation
-              "tm", # text mining package
-              "textmineR",
-              "tidytext",
               "ggplot2", # plotting package
               "quanteda", #kwic function search phrases
-              "xtable", "DT", #viewing data type from quanteda
               "stringi", #string manipulation
-              "wordcloud","tidyquant",
-              "caTools","caret", "rpart", "h2o","e1071","RWeka",
-              "randomForest"
-)
+              "tidyquant", "openxlsx","anytime",
+              "caTools","caret", "rpart", "h2o","e1071","RWeka","randomForest") # machine learning packages
 
 if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
   install.packages(setdiff(packages, rownames(installed.packages())))
 }
 lapply(packages, require, character.only = TRUE)
 
+############################
+# Input data
 
-###########################
-#     Prepare dataset     #
-###########################
+token_name <- 'BTC'
 
-# Load BTC 08.05.2018
-BTC <- as.data.frame(read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/1_$BTC_FULL.csv',
-                              locale = locale(encoding = 'latin1')))
-BTC <- BTC %>% select(created_at, status_id, screen_name, user_id, text)
-
-source('~/GitHub/NextBigCrypto-Senti/2. Preprocessing/1. Preprocessing_TW.R')
-
-# Run dataset through preprocessing pipeline
-BTC.clean <- Cleandata(BTC)
-BTC.clean$status_id <- as.character(BTC.clean$status_id)
-BTC.clean$user_id <- as.character(BTC.clean$user_id)
-
-###################################
-#     Load SA models (trained)    #
-###################################
-
-# Using best model so far (GBM-tuned 080518)
-h2o.init()
-gbm.model.opt <- h2o.loadModel('./Models/H2O/final_grid_model_1')
-
-# Implement batch-running (in process)
-i <- 1
-j <- 50000
-
-while (i <= j) {
-  # Preprocessing
-  corp <- VCorpus(VectorSource(BTC.clean$processed[i:j])) # VCorpus compatible with n-gram analysis
-  # Unigram
-  frequencies <- DocumentTermMatrix(corp,
-                                    control = list(weighting = function(x) weightTfIdf(x, normalize = FALSE)))
-  # Remove these words that are not used very often. Keep terms that appear in 0.5% or more of the dataset
-  sparse <- removeSparseTerms(frequencies, 0.995)
-  
-  # Generate sparse matrix
-  ResultSparse <- as.data.frame(as.matrix(sparse))
-  colnames(ResultSparse) <- make.names(colnames(ResultSparse))
-
-  # Convert to H2O format
-  fullH2O <- as.h2o(ResultSparse)
-  
-  # Prediction by batches
-  predictionsGBM.opt <- as.data.frame(h2o.predict(gbm.model.opt,fullH2O))
-  
-  if (i==1){BTC.senti <- cbind(BTC.clean[i:j,], sentiment.trained = predictionsGBM.opt$predict)}
-  if (i!=1){BTC.senti <- rbind(BTC.senti,cbind(BTC.clean[i:j,],sentiment.trained = predictionsGBM.opt$predict))}
-  
-  print(paste0('Complete from ',i,' to ',j,' observations!'))
-  # increase i and j
-  i <- i + 50000
-  ifelse((j + 50000) <= nrow(BTC.clean),j <- j + 50000, j <- nrow(BTC.clean))
-  
-  gc()
-  }
-
-BTC.senti <- BTC.senti %>%
-  mutate(date = as.Date(created_at))%>%
-  select(date, status_id, user_id, screen_name, text, processed, 
-         botprob, sentiment.packages, sentiment.trained)
-
-# Summarize base on sentiment each day
-# Trained models
-BTC.senti.trained <-BTC.senti.final %>% 
-  select(date,sentiment.trained) %>%
-  group_by(date, sentiment.trained) %>%
-  summarize(count =n())
-
-# Get total + percentage of each class / day
-BTC.senti.trained <- BTC.senti.trained %>% 
-                      group_by(date) %>% 
-                      mutate(countT = sum(count)) %>%
-                      group_by(sentiment.trained) %>%
-                      mutate(per = round(100* count/countT,2))
-
-# Convert to each sentiment = column
-BTC.senti.trained <- dcast(BTC.senti.trained, date + countT ~ sentiment.trained , 
-                           value.var = 'per')
-colnames(BTC.senti.trained) <- c('date','count','neg','neu','pos')
-
-
-#######################################################################################
-###############################
-#     Load price dataset      #
-###############################
 ##########################
 # load price dataset
 
-start_date <- min(BTC.senti.final$date)
-end_date <- max(BTC.senti.final$date)
-token_name <- 'BTC'
+price.df <- read.xlsx(paste0('~/GitHub/NextBigCrypto-Senti/1. Crawlers/Historical_Data_HR.xlsx')) %>%
+  filter(symbol == token_name) %>%
+  dplyr::select(-date.time) %>%
+  mutate(date.time = anytime(time))
 
-price.df <- read_csv("./1. Crawlers/Crypto-Markets_2018-05-07.csv") %>%
-  filter(symbol == token_name & date >= start_date & date <= end_date) %>%
-  select(date,close)
+# filter out 6-hr mark
+price.df$mark <- NA
+for (i in 1:nrow(price.df)){
+  if (lubridate::hour(price.df$date.time[i]) %in% c(0,6,12,18)){price.df$mark[i] <- 1}  
+}
+
+price.df <- price.df %>% 
+  filter(mark == 1) %>%
+  dplyr::select(time,close,priceBTC)
+
+bk <- price.df #backup
 
 # calculate differences between close prices of each transaction dates
 price.df$pricediff <- 0
@@ -153,14 +76,9 @@ for (i in 2:nrow(price.df)){
 for (i in 2:nrow(price.df)){
   price.df$bin[i] <- ifelse(price.df$diff[i] < 0,'down','up')
 }
-# Remove NA
-price.df <- price.df[complete.cases(price.df),]
 
-#
-# FEATURES ENGINEER
-#
 # Generate columns through loop
-x <- 14 # number of time shifts want to make
+x <- 28 # number of time shifts want to make
 
 for (i in 1:x){
   eval(parse(text = paste0('price.df$t_', i,' <- NA')))
@@ -170,57 +88,25 @@ for (i in 1:nrow(price.df)){
   for (j in 1:x){
     eval(parse(text = paste0('price.df$t_', j,' <- as.factor(lag(price.df$bin,',j,'))')))
   }
-}
+  }
+
 # Convert to categorical variables
 price.df$bin <- as.factor(price.df$bin)
-price.df <- unique(price.df)
 
-#############################################################
-# Sentiment Analysis dataset
-
-name <- c('count','pos','neg','neu')
-
-for (k in 1:length(name)){
-  # Create 14x4 sentiment features
-  # Generate columns through loop
-  for (i in 1:x){
-    eval(parse(text = paste0('BTC.senti.trained$,',name[k],'_', i,' <- NA')))
-  }
-  
-  for (i in 1:nrow(price.df)){
-    for (j in 1:x){
-      eval(parse(text = paste0('BTC.senti.trained$,',name[k],'_', j,' <- lag(BTC.senti.trained$,',name[k],'_',j,')')))
-    }
-  }
-}
-
-########################################################################################
-
-# Build a training and testing set ==> split into 14 days with 4 new features/day
-main.df <- inner_join(price.df, BTC.senti.trained, by = 'date')
-main.df <- unique(main.df)
-# Select only relevant features
-main.df <- main.df %>%
-  dplyr::select(-date,-close,-diff,-pricediff,
-                -count,-neg,-neu,-pos)
-
-# Test 11.05 - keep only t-1 ==> t-3
-main.df <- main.df %>%
-  dplyr::select(-t_4,-t_5,-t_6,-t_7,-t_8,-t_9,-t_10,-t_11,-t_12,-t_13,-t_14,
-                -neg_4,-neg_5,-neg_6,-neg_7,-neg_8,-neg_9,-neg_10,-neg_11,-neg_12,-neg_13,-neg_14,
-                -neu_4,-neu_5,-neu_6,-neu_7,-neu_8,-neu_9,-neu_10,-neu_11,-neu_12,-neu_13,-neu_14,
-                -pos_4,-pos_5,-pos_6,-pos_7,-pos_8,-pos_9,-pos_10,-pos_11,-pos_12,-pos_13,-pos_14,
-                -count_4,-count_5,-count_6,-count_7,-count_8,-count_9,-count_10,-count_11,-count_12,-count_13,-count_14)
+# Build a training and testing set.
+main.df <- price.df %>% 
+  dplyr::select(-time,-close,-priceBTC,-pricediff,-diff)
 
 # Remove NA 
 main.df <- main.df[complete.cases(main.df),]
-
+main.df <- unique(main.df)
 # Split random
 set.seed(1908)
 split <- sample.split(main.df$bin, SplitRatio=0.8) #bin is target variable
 train <- subset(main.df, split==TRUE)
 test <- subset(main.df, split==FALSE)
 
+gc()
 ##########################################################################################################
 # Function to calculate accuracy/prediction/recall
 
@@ -327,12 +213,6 @@ metrics <- function(cm) {
   return(final)
 }
 
-###############################
-#                             #
-#       MAIN MODEL            #
-#                             #
-###############################
-
 ####################################################################################
 # Features Importance Analysis
 
@@ -352,8 +232,7 @@ shortlistedVars <- shortlistedVars[!shortlistedVars %in% "(Intercept)"]  # remov
 print(shortlistedVars)
 
 # Variance importance factor (>2 is multicollinearity)
-VIF <- as.data.frame(car::vif(all.mod))
-colnames(VIF) <- c('VIF')
+car::vif(all.mod)
 
 ##############################
 
@@ -388,11 +267,11 @@ prediction.Logi
 # Convert to up/down
 prediction.Logi <- ifelse(prediction.Logi < 0.5,'down','up')
 
+confusionMatrix(as.factor(prediction.Logi),test$bin)
 
 cmLogi <- table(test$bin, prediction.Logi)
-metrics(cmLogi) # 59%
+metrics(cmLogi) 
 
-confusionMatrix(as.factor(prediction.Logi),test$bin)
 
 ########################################
 # Naive Bayes
@@ -427,7 +306,7 @@ cmRF <- table(test$bin, predictionsRF)
 
 confusionMatrix(predictionsRF,test$bin)
 
-metrics(cmRF) 
+metrics(cmRF)
 
 ########################################
 # Support Vector Machine
@@ -461,24 +340,19 @@ cmC50 <- table(test$bin, predictionsC50)
 
 confusionMatrix(predictionsC50,test$bin)
 
-metrics(cmC50)
-
-# Temporary save
-save.image('~/GitHub/NextBigCrypto-Senti/Models/SAT_v1_110518.RData')
-# load('~/GitHub/NextBigCrypto-Senti/Models/SAT_v1_110518.RData')
-
+metrics(cmC50) 
 
 ####################################################################################################################
 # RFE RF
 set.seed(1908)
 
-ctrl.rf <- rfeControl(functions = rfFuncs, # random forest
+ctrl <- rfeControl(functions = rfFuncs, # random forest
                    method = "cv",
                    number = 10,
                    verbose = FALSE)
 
 # convert dependent variables to factor vector
-y <- train[,1]
+y <- train[,2]
 y <- as.vector(unlist(y))
 y <- as.factor(y)
 
@@ -486,7 +360,7 @@ y <- as.factor(y)
 rfProfile <- rfe(x = train[,2:ncol(train)], # features
                  y,
                  sizes = 1:10,   # retain from 1-8 features
-                 rfeControl =  ctrl.rf)
+                 rfeControl =  ctrl)
 
 # summary of rfe
 rfProfile
@@ -499,21 +373,12 @@ head(rfProfile$resample)
 # Ploting rfe progress
 trellis.par.set(caretTheme())
 plot(rfProfile, type = c("g", "o"), main = 'RFE for Random Forest')
-########################################
-# Route 1
-## Apply new predictors to Random Forest
-newRF_rfe <- predict(rfProfile, test[,2:ncol(test)])
-newRF_rfe
 
-cmRF_rfe1 <- table(test$bin,newRF_rfe$pred)
-metrics(cmRF_rfe1) 
-
-confusionMatrix(newRF_rfe$pred,test$bin)
 ##########################################################
 # Recursive feature elimination NB (via caret package)
 set.seed(1908)
 
-ctrl.nb <- rfeControl(functions = nbFuncs, #naive bayes
+ctrl <- rfeControl(functions = nbFuncs, #naive bayes
                    method = "cv",
                    number = 10,
                    verbose = FALSE)
@@ -527,7 +392,7 @@ y <- as.factor(y)
 nbProfile <- rfe(x = train[,2:ncol(train)], # features
                  y,
                  sizes = 1:10,   # retain from 1-8 features
-                 rfeControl =  ctrl.nb)
+                 rfeControl =  ctrl)
 
 # summary of rfe
 nbProfile
@@ -548,7 +413,7 @@ newNB_rfe <- predict(nbProfile, test[,2:ncol(test)])
 newNB_rfe
 
 cmNB_rfe1 <- table(test$bin,newNB_rfe$pred)
-metrics(cmNB_rfe1) 
+metrics(cmNB_rfe1)
 
 confusionMatrix(newNB_rfe$pred,test$bin)
 
@@ -560,8 +425,8 @@ f <- as.formula(paste("bin", paste(nbProfile$optVariables, collapse=" + "), sep=
 set.seed(1908)
 NBayes_rfe <- train(f,
                     data = train,
-                    laplace = 1, 
-                    method = "nb",
+                    laplace = 1, method = "nb",
+                    na.action = na.exclude,
                     trControl = train_control)
 
 predictionsNB_rfe <- predict(NBayes_rfe, newdata=test[,2:ncol(test)])
@@ -571,3 +436,4 @@ cmNB_rfe2 <- table(test$bin, predictionsNB_rfe)
 metrics(cmNB_rfe2)
 confusionMatrix(predictionsNB_rfe,test$bin)
 ##########################################
+
