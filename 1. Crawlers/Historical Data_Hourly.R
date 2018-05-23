@@ -98,7 +98,7 @@ for (i in 1:nrow(coins_list)){
   current <- max(hourly.df$time)
   df <- hourly.df %>% filter(symbol == token) %>% select(-symbol)
   
-  if(i == 9){token <- 'IOTA'} # fix IOTA
+  if(i == 9){next} # skip
   if(i == 1){final.hr <- Get.Hourly.Data(df,
                                          token,timelimit,current)}
   if(i != 1){final.hr <- rbind(final.hr,Get.Hourly.Data(df,

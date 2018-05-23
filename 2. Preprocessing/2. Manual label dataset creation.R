@@ -14,7 +14,7 @@ packages <- c("readr", #read data
               "data.table",
               "stringi", #string manipulation
               "stringr",
-              "tm","openxlsx","qdapRegex","qdap"
+              "tm","openxlsx","qdapRegex","qdap","NLP","openNLP"
 )
 
 #remove.packages(c("tidytext", "ggplot2"))
@@ -26,10 +26,11 @@ lapply(packages, require, character.only = TRUE)
 ###################################################
 
 #Input data
-# Use new set of manual.df 08.05.18
-df <- as.data.frame(read.xlsx('Manual_Dataset_0805_labeling.xlsx')) %>%
+# Use new set of manual.df 14.05.18
+df <- as.data.frame(read.xlsx('~/GitHub/NextBigCrypto-Senti/Manual_Dataset_1405_labeling.xlsx')) %>%
   select(status_id, text, sentiment) %>%
   filter(is.na(sentiment) == FALSE)
+df %>% group_by(sentiment) %>%tally
 
 ######################
 #
@@ -152,8 +153,10 @@ Cleandata <- function(df) {
   df <- df[!duplicated(df$processed),]
   
   # Lemmatization 26.04.18
-  df$processed <- sapply(df$processed, function(x) textstem::lemmatize_strings(x))
+  # df$processed <- sapply(df$processed, function(x) textstem::lemmatize_strings(x))
   
+  # Tag POS + Lemmatization 14.05.18
+  df$processed <- sapply(df$processed, function(x) tagPOS_lemma(x))
   return(df)
 }
 
@@ -193,9 +196,38 @@ convertAbbreviations <- function(message){
   }
 }
 
+# Tag POS 14.05
+tagPOS_lemma <-  function(x, ...) {
+  # POS original string
+  s <- as.String(x)
+  word_token_annotator <- Maxent_Word_Token_Annotator()
+  a2 <- Annotation(1L, "sentence", 1L, nchar(s))
+  a2 <- annotate(s, word_token_annotator, a2)
+  a3 <- annotate(s, Maxent_POS_Tag_Annotator(), a2)
+  a3w <- a3[a3$type == "word"]
+  # Collect POS tagging
+  POStags <- unlist(lapply(a3w$features, `[[`, "POS"))
+  POStagged <- paste(sprintf("%s_%s", s[a3w], POStags), collapse = " ")
+  
+  gc() # garbage collection
+  
+  # Lemmatization then remerge with POS-tag
+  x <- unlist(strsplit(POStagged," "))
+  
+  for (i in 1:length(x[[1]])){
+    txt <- gsub("_[^_]+$", "", x[[1]][i]) # capture everything before "_"
+    x[[1]][i] <- gsub("^[^_]+", "", x[[1]][1]) #replace the captured part with blank
+    txt <- textstem::lemmatize_words(txt)
+    # Re-add lemmatized string back to POS-tag
+    x[[1]][i] <- paste0(txt,x[[1]][i])
+  }
+  result <- paste(x,collapse = " ")
+  return(result)
+}
+
+
+#####################################################################################
 # Clean function
 clean.df <- Cleandata(df)
 
-write_csv(clean.df,'Manual_Dataset_0805.csv')
-
-
+write_csv(clean.df,'Manual_Dataset_POS_1405.csv')

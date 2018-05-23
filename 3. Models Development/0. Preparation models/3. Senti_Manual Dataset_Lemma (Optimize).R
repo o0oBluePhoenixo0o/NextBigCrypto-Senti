@@ -10,10 +10,10 @@
 # load('./Models/Senti_Manual_TriGram_2018-04-26.RData')
 # load('./Models/Senti_Manual_BiGram_2018-04-26.RData')
 # load('./Models/Senti_Manual_UniGram_2018-04-26.RData')
-# 
+# # 
 # # Trained models
 # metrics(cm.mlr)
-# metrics(cmCART_kfold) 
+# metrics(cmCART_kfold)
 # metrics(cmRF)
 # metrics(cmSVM_kfold)
 # metrics(cmNB)
@@ -22,8 +22,8 @@
 # metrics(cmDRF)
 # metrics(cmMAJOR)
 # # Packages
-# metrics(cmBL) 
-# metrics(cm_nrc) 
+# metrics(cmBL)
+# metrics(cm_nrc)
 # metrics(cm_syuzhet)
 # metrics(cm_afinn)
 # metrics(cm_sentimentr)
@@ -31,7 +31,7 @@
 
 # clear the environment
 rm(list= ls())
-
+gc()
 # load packages and set options
 options(stringsAsFactors = FALSE)
 
@@ -61,14 +61,13 @@ lapply(packages, require, character.only = TRUE)
 # Pick Unigram - Lemma as case for DRF + GBM optimization
 # load('~/GitHub/NextBigCrypto-Senti/Models/Senti_Manual_Uni_TFIDF_working.RData')
 
-
 ########################################################
 # Read the manual dataset (current ~2700 available messages)
 # manual.df <- read.xlsx('Manual_Dataset_1004_labeling.xlsx') %>%
 #   dplyr::select(status_id,text,processed,sentiment,trade_senti) %>%
 #   filter(sentiment %in% c(-1,0,1))
 
-manual.df <- read_csv('Manual_Dataset_0805.csv') %>%
+manual.df <- read_csv('Manual_Dataset_1405.csv') %>%
   dplyr::select(status_id,text,processed,sentiment) %>%
   filter(sentiment %in% c(-1,0,1))
 
@@ -76,10 +75,10 @@ manual.df$status_id <- as.character(manual.df$status_id)
 
 manual.df %>% group_by(sentiment) %>%tally # overall observation
 
-# 01.05.2018
-# Positive	1195
-# Neutral	  1501
-# Negative	492
+# 14.05.2018
+# Positive	1221
+# Neutral	  1510
+# Negative	570
 
 ########################################################
 # Preprocessing
@@ -239,11 +238,12 @@ metrics <- function(cm) {
 # Train GBM and DRF model
 gbm.model <- h2o.gbm(  training_frame = trainH2O,
                        #validation_frame = testH2O,
-                       x=2:ncol(trainH2O),
-                       y=1,
-                       ntrees = 1000,
+                       x=2:ncol(trainH2O),            
+                       y=1,         
+                       ntrees = 500, 
                        max_depth = 30,
-                       learn_rate = 0.3,
+                       learn_rate = 0.05, 
+                       learn_rate_annealing = 0.99,
                        nfolds = 10,
                        seed = 1234)
 
@@ -279,7 +279,7 @@ h2o.performance(gbm.model,newdata = testH2O)
 # Optimization GBM
 
 ## Depth 10 is usually plenty of depth for most datasets, but you never know
-hyper_params = list( max_depth = seq(1,29,2) )
+hyper_params = list( max_depth = seq(1,50,2) )
 #hyper_params = list( max_depth = c(4,6,8,12,16,20) ) ##faster for larger datasets
 
 grid <- h2o.grid(
@@ -431,7 +431,7 @@ metrics(cmGBM.opt)
 h2o.saveModel(gbm.model.opt, path = './Models/H2O/', force = TRUE)
 
 # Save R environment
-save.image('~/GitHub/NextBigCrypto-Senti/Models/Senti_zGBM_DRF_Optimized_080518.RData')
+save.image('~/GitHub/NextBigCrypto-Senti/Models/Senti_GBM_DRF_Optimized_160518.RData')
 
-# load('~/GitHub/NextBigCrypto-Senti/Models/Senti_GBM_DRF_Optimized_080518.RData')
+# load('~/GitHub/NextBigCrypto-Senti/Models/Senti_GBM_DRF_Optimized_160518.RData')
  

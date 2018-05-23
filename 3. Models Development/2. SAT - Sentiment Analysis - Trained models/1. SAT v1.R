@@ -2,8 +2,8 @@
 
 # clear the environment
 rm(list= ls())
+gc()
 # rm(list=setdiff(ls(), c("BTC.senti","BTC.senti.done"))) #remove everything except BTC.clean
-
 # load packages and set options
 options(stringsAsFactors = FALSE)
 
@@ -15,7 +15,7 @@ packages <- c("readr", #read data
               "lubridate", #date time conversion
               "dplyr", #date manipulation
               "tm", # text mining package
-              "textmineR",
+              "textmineR","openxlsx",
               "tidytext",
               "ggplot2", # plotting package
               "quanteda", #kwic function search phrases
@@ -31,15 +31,14 @@ if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
 }
 lapply(packages, require, character.only = TRUE)
 
-
 ###########################
 #     Prepare dataset     #
 ###########################
 
 # Load BTC 08.05.2018
 BTC <- as.data.frame(read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/1_$BTC_FULL.csv',
-                              locale = locale(encoding = 'latin1')))
-BTC <- BTC %>% select(created_at, status_id, screen_name, user_id, text)
+                              locale = locale(encoding = 'latin1'))) %>% 
+  dplyr::select(created_at, status_id, screen_name, user_id, text)
 
 source('~/GitHub/NextBigCrypto-Senti/2. Preprocessing/1. Preprocessing_TW.R')
 
@@ -47,6 +46,11 @@ source('~/GitHub/NextBigCrypto-Senti/2. Preprocessing/1. Preprocessing_TW.R')
 BTC.clean <- Cleandata(BTC)
 BTC.clean$status_id <- as.character(BTC.clean$status_id)
 BTC.clean$user_id <- as.character(BTC.clean$user_id)
+
+#  temporary
+# write_csv(BTC.clean,'~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_1605.csv')
+
+BTC.clean <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_2205.csv')
 
 ###################################
 #     Load SA models (trained)    #
@@ -89,31 +93,36 @@ while (i <= j) {
   
   gc()
   }
+h2o.shutdown()
+gc()
 
 BTC.senti <- BTC.senti %>%
-  mutate(date = as.Date(created_at))%>%
+  mutate(date = as_datetime(created_at))%>%
   select(date, status_id, user_id, screen_name, text, processed, 
-         botprob, sentiment.packages, sentiment.trained)
+         botprob, sentiment.trained)
 
 # Summarize base on sentiment each day
 # Trained models
-BTC.senti.trained <-BTC.senti.final %>% 
-  select(date,sentiment.trained) %>%
-  group_by(date, sentiment.trained) %>%
-  summarize(count =n())
+# 20.05 trigger 6/12/24hr
+time.slot <- 6 # insert trigger
+
+BTC.senti.trained <- BTC.senti %>% 
+  dplyr::select(date,sentiment.trained) %>%
+  group_by(time = floor_date(date, paste0(time.slot,' hour')),
+           sentiment.trained) %>%
+  summarize(count = n())
 
 # Get total + percentage of each class / day
 BTC.senti.trained <- BTC.senti.trained %>% 
-                      group_by(date) %>% 
+                      group_by(time) %>% 
                       mutate(countT = sum(count)) %>%
                       group_by(sentiment.trained) %>%
                       mutate(per = round(100* count/countT,2))
 
 # Convert to each sentiment = column
-BTC.senti.trained <- dcast(BTC.senti.trained, date + countT ~ sentiment.trained , 
-                           value.var = 'per')
-colnames(BTC.senti.trained) <- c('date','count','neg','neu','pos')
-
+BTC.senti.trained <- reshape2::dcast(BTC.senti.trained, time + countT ~ sentiment.trained,
+                                     value.var = 'per')
+colnames(BTC.senti.trained) <- c('time','count','neg','neu','pos')
 
 #######################################################################################
 ###############################
@@ -121,14 +130,29 @@ colnames(BTC.senti.trained) <- c('date','count','neg','neu','pos')
 ###############################
 ##########################
 # load price dataset
-
-start_date <- min(BTC.senti.final$date)
-end_date <- max(BTC.senti.final$date)
 token_name <- 'BTC'
 
-price.df <- read_csv("./1. Crawlers/Crypto-Markets_2018-05-07.csv") %>%
-  filter(symbol == token_name & date >= start_date & date <= end_date) %>%
-  select(date,close)
+price.df <- read.xlsx(paste0('~/GitHub/NextBigCrypto-Senti/1. Crawlers/Historical_Data_HR.xlsx')) %>%
+  filter(symbol == token_name) %>%
+  dplyr::select(-date.time)
+
+# convert to UTC (20.05.18) -- IMPORTANT!!
+price.df$time <- as_datetime(anytime::anytime(price.df$time))
+
+# filter out 24-hr mark
+price.df$mark <- NA
+
+if (time.slot == 6){target <- c(0,6,12,18)}
+if (time.slot == 12){target <- c(0,12)}
+if (time.slot == 24){target <- c(0)}
+
+for (i in 1:nrow(price.df)){
+  if (lubridate::hour(price.df$time[i]) %in% target){price.df$mark[i] <- 1}  
+}
+
+price.df <- price.df %>% 
+  filter(mark == 1) %>%
+  dplyr::select(time,close,priceBTC)
 
 # calculate differences between close prices of each transaction dates
 price.df$pricediff <- 0
@@ -153,14 +177,15 @@ for (i in 2:nrow(price.df)){
 for (i in 2:nrow(price.df)){
   price.df$bin[i] <- ifelse(price.df$diff[i] < 0,'down','up')
 }
-# Remove NA
-price.df <- price.df[complete.cases(price.df),]
 
+########################################
 #
 # FEATURES ENGINEER
 #
+########################################
+
 # Generate columns through loop
-x <- 14 # number of time shifts want to make
+x <- 14/(time.slot/24) # number of time shifts want to make
 
 for (i in 1:x){
   eval(parse(text = paste0('price.df$t_', i,' <- NA')))
@@ -171,6 +196,7 @@ for (i in 1:nrow(price.df)){
     eval(parse(text = paste0('price.df$t_', j,' <- as.factor(lag(price.df$bin,',j,'))')))
   }
 }
+
 # Convert to categorical variables
 price.df$bin <- as.factor(price.df$bin)
 price.df <- unique(price.df)
@@ -184,33 +210,33 @@ for (k in 1:length(name)){
   # Create 14x4 sentiment features
   # Generate columns through loop
   for (i in 1:x){
-    eval(parse(text = paste0('BTC.senti.trained$,',name[k],'_', i,' <- NA')))
+    eval(parse(text = paste0('BTC.senti.trained$',name[k],'_', i,' <- NA')))
   }
   
-  for (i in 1:nrow(price.df)){
+  for (i in 1:nrow(BTC.senti.trained)){
     for (j in 1:x){
-      eval(parse(text = paste0('BTC.senti.trained$,',name[k],'_', j,' <- lag(BTC.senti.trained$,',name[k],'_',j,')')))
+      eval(parse(text = paste0('BTC.senti.trained$',name[k],'_', j,' <- lag(BTC.senti.trained$',name[k],',',j,')')))
     }
   }
 }
 
 ########################################################################################
-
 # Build a training and testing set ==> split into 14 days with 4 new features/day
-main.df <- inner_join(price.df, BTC.senti.trained, by = 'date')
+main.df <- inner_join(price.df, BTC.senti.trained, by = 'time')
 main.df <- unique(main.df)
+
 # Select only relevant features
 main.df <- main.df %>%
-  dplyr::select(-date,-close,-diff,-pricediff,
-                -count,-neg,-neu,-pos)
+  dplyr::select(-time,-close,-diff,-pricediff,
+                -count,-neg,-neu,-pos,-priceBTC)
 
-# Test 11.05 - keep only t-1 ==> t-3
-main.df <- main.df %>%
-  dplyr::select(-t_4,-t_5,-t_6,-t_7,-t_8,-t_9,-t_10,-t_11,-t_12,-t_13,-t_14,
-                -neg_4,-neg_5,-neg_6,-neg_7,-neg_8,-neg_9,-neg_10,-neg_11,-neg_12,-neg_13,-neg_14,
-                -neu_4,-neu_5,-neu_6,-neu_7,-neu_8,-neu_9,-neu_10,-neu_11,-neu_12,-neu_13,-neu_14,
-                -pos_4,-pos_5,-pos_6,-pos_7,-pos_8,-pos_9,-pos_10,-pos_11,-pos_12,-pos_13,-pos_14,
-                -count_4,-count_5,-count_6,-count_7,-count_8,-count_9,-count_10,-count_11,-count_12,-count_13,-count_14)
+# # Test 11.05 - keep only t-1 ==> t-3
+# main.df <- main.df %>%
+#   dplyr::select(-t_4,-t_5,-t_6,-t_7,-t_8,-t_9,-t_10,-t_11,-t_12,-t_13,-t_14,
+#                 -neg_4,-neg_5,-neg_6,-neg_7,-neg_8,-neg_9,-neg_10,-neg_11,-neg_12,-neg_13,-neg_14,
+#                 -neu_4,-neu_5,-neu_6,-neu_7,-neu_8,-neu_9,-neu_10,-neu_11,-neu_12,-neu_13,-neu_14,
+#                 -pos_4,-pos_5,-pos_6,-pos_7,-pos_8,-pos_9,-pos_10,-pos_11,-pos_12,-pos_13,-pos_14,
+#                 -count_4,-count_5,-count_6,-count_7,-count_8,-count_9,-count_10,-count_11,-count_12,-count_13,-count_14)
 
 # Remove NA 
 main.df <- main.df[complete.cases(main.df),]
@@ -342,7 +368,6 @@ boruta_signif <- names(boruta_output$finalDecision[boruta_output$finalDecision %
 print(boruta_signif)  # significant variables
 plot(boruta_output, cex.axis=.7, las=2, xlab="", main="Variable Importance")  # plot variable importance
 
-
 # Stepwise regression
 base.mod <- glm(bin ~ 1 , data= train, family = binomial)  # base intercept only model
 all.mod <- glm(bin ~ . , data= train, family = binomial) # full model with all predictors
@@ -388,11 +413,10 @@ prediction.Logi
 # Convert to up/down
 prediction.Logi <- ifelse(prediction.Logi < 0.5,'down','up')
 
+confusionMatrix(as.factor(prediction.Logi),test$bin)
 
 cmLogi <- table(test$bin, prediction.Logi)
-metrics(cmLogi) # 59%
-
-confusionMatrix(as.factor(prediction.Logi),test$bin)
+metrics(cmLogi) # 50% acc
 
 ########################################
 # Naive Bayes
@@ -410,7 +434,7 @@ cmNB <- table(test$bin, predictionsNB)
 
 confusionMatrix(predictionsNB,test$bin)
 
-metrics(cmNB)
+metrics(cmNB) # 50% acc
 
 ########################################
 # Random Forest
@@ -427,7 +451,7 @@ cmRF <- table(test$bin, predictionsRF)
 
 confusionMatrix(predictionsRF,test$bin)
 
-metrics(cmRF) 
+metrics(cmRF) # 65% acc
 
 ########################################
 # Support Vector Machine
@@ -444,7 +468,7 @@ cmSVM <- table(test$bin, predictionsSVM)
 
 confusionMatrix(predictionsSVM,test$bin)
 
-metrics(cmSVM)
+metrics(cmSVM) # 59% acc
 
 ########################################
 # C5.0 tree
@@ -464,9 +488,7 @@ confusionMatrix(predictionsC50,test$bin)
 metrics(cmC50)
 
 # Temporary save
-save.image('~/GitHub/NextBigCrypto-Senti/Models/SAT_v1_110518.RData')
-# load('~/GitHub/NextBigCrypto-Senti/Models/SAT_v1_110518.RData')
-
+save.image('~/GitHub/NextBigCrypto-Senti/Models/SAT_6h_200518.RData')
 
 ####################################################################################################################
 # RFE RF

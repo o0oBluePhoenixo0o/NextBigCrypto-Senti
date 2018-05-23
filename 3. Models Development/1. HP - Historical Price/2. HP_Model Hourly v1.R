@@ -78,7 +78,7 @@ for (i in 2:nrow(price.df)){
 }
 
 # Generate columns through loop
-x <- 28 # number of time shifts want to make
+x <- 7*4# number of time shifts want to make
 
 for (i in 1:x){
   eval(parse(text = paste0('price.df$t_', i,' <- NA')))
@@ -220,7 +220,7 @@ metrics <- function(cm) {
 boruta_output <- Boruta::Boruta(bin ~ ., data = train, doTrace=2)  # perform Boruta search
 boruta_signif <- names(boruta_output$finalDecision[boruta_output$finalDecision %in% c("Confirmed", "Tentative")])  # collect Confirmed and Tentative variables
 print(boruta_signif)  # significant variables
-plot(boruta_output, cex.axis=.7, las=2, xlab="", main="Variable Importance")  # plot variable importance
+plot(boruta_output, cex.axis=.7, las=2, xlab="", main="Variable Importance Analysis")  # plot variable importance
 
 
 # Stepwise regression
@@ -270,8 +270,7 @@ prediction.Logi <- ifelse(prediction.Logi < 0.5,'down','up')
 confusionMatrix(as.factor(prediction.Logi),test$bin)
 
 cmLogi <- table(test$bin, prediction.Logi)
-metrics(cmLogi) 
-
+metrics(cmLogi) # acc 58% / t=6hr / x = 14 x 4
 
 ########################################
 # Naive Bayes
@@ -289,7 +288,7 @@ cmNB <- table(test$bin, predictionsNB)
 
 confusionMatrix(predictionsNB,test$bin)
 
-metrics(cmNB)
+metrics(cmNB) # skewed
 
 ########################################
 # Random Forest
@@ -342,8 +341,11 @@ confusionMatrix(predictionsC50,test$bin)
 
 metrics(cmC50) 
 
-####################################################################################################################
+###################
+# Recursive Features Elimination
+#
 # RFE RF
+#
 set.seed(1908)
 
 ctrl <- rfeControl(functions = rfFuncs, # random forest
@@ -352,14 +354,14 @@ ctrl <- rfeControl(functions = rfFuncs, # random forest
                    verbose = FALSE)
 
 # convert dependent variables to factor vector
-y <- train[,2]
+y <- train[,1]
 y <- as.vector(unlist(y))
 y <- as.factor(y)
 
 # apply rfe
 rfProfile <- rfe(x = train[,2:ncol(train)], # features
                  y,
-                 sizes = 1:10,   # retain from 1-8 features
+                 sizes = 1:15,   # retain from 1-15 features
                  rfeControl =  ctrl)
 
 # summary of rfe
@@ -374,6 +376,36 @@ head(rfProfile$resample)
 trellis.par.set(caretTheme())
 plot(rfProfile, type = c("g", "o"), main = 'RFE for Random Forest')
 
+########################################
+# Route 1
+## Apply new predictors to NBayes
+newRF_rfe <- predict(rfProfile, test[,2:ncol(test)])
+newRF_rfe
+
+cmRF_rfe1 <- table(test$bin,newRF_rfe$pred)
+metrics(cmRF_rfe1)
+
+confusionMatrix(newRF_rfe$pred,test$bin)
+
+# Route 2
+## Apply new predictors to modeling
+rfProfile$optVariables
+f <- as.formula(paste("bin", paste(rfProfile$optVariables, collapse=" + "), sep=" ~ "))
+
+set.seed(1908)
+RF_rfe <- train(f,
+                data = train,
+                method = "rf",
+                na.action = na.exclude,
+                trControl = train_control)
+
+predictionsRF_rfe <- predict(RF_rfe, newdata=test[,2:ncol(test)])
+
+cmRF_rfe2 <- table(test$bin, predictionsRF_rfe)
+
+metrics(cmRF_rfe2)
+confusionMatrix(predictionsRF_rfe,test$bin)
+gc()
 ##########################################################
 # Recursive feature elimination NB (via caret package)
 set.seed(1908)

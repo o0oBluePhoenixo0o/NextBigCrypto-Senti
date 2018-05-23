@@ -6,10 +6,11 @@
 # 29.04.18 - Test stopwords v2 with token additions --> v1 is better
 # 30.04.18 - Abbreviation conversion for Unigram + Lemmatization + Stopwords v1
 # 08.05.18 - Revisit tf-idf + fix abbreviation conversion + completed enhanced GBM (tuned)
+# 15.05.18 - Add POS tagging before Lemma
 
 # clear the environment
 rm(list= ls())
-
+gc()
 # load packages and set options
 options(stringsAsFactors = FALSE)
 
@@ -28,7 +29,7 @@ packages <- c("readr", #read data
               "xtable", "DT", #viewing data type from quanteda
               "stringi", #string manipulation
               "wordcloud","tidyquant",
-              "caTools","caret", "rpart", "h2o","e1071","RWeka",
+              "caTools","caret", "rpart", "h2o","e1071","RWeka","NLP","openNLP",
               "randomForest"
 )
 
@@ -43,7 +44,7 @@ lapply(packages, require, character.only = TRUE)
 #   dplyr::select(status_id,text,processed,sentiment,trade_senti) %>%
 #   filter(sentiment %in% c(-1,0,1))
 
-manual.df <- read_csv('Manual_Dataset_0805.csv') %>%
+manual.df <- read_csv('Manual_Dataset_1405.csv') %>%
   dplyr::select(status_id,text,processed,sentiment) %>%
   filter(sentiment %in% c(-1,0,1))
 
@@ -51,10 +52,10 @@ manual.df$status_id <- as.character(manual.df$status_id)
 
 manual.df %>% group_by(sentiment) %>%tally # overall observation
 
-# 01.05.2018
-# Positive	1177
-# Neutral	  1457
-# Negative	395
+# 15.05.2018 ~ 3301
+# Positive	1221
+# Neutral	  1510
+# Negative	570
 
 ########################################################
 # Preprocessing
@@ -297,8 +298,9 @@ gbm.model <- h2o.gbm(  training_frame = trainH2O,
                        x=2:ncol(trainSparse),            
                        y=1,         
                        ntrees = 500, 
-                       max_depth = 50, 
-                       learn_rate = 0.3, 
+                       max_depth = 30,
+                       learn_rate = 0.05, 
+                       learn_rate_annealing = 0.99,
                        nfolds = 10,
                        seed = 1234)
 
@@ -528,7 +530,9 @@ cmMAJOR.packages <- table(major.packages$Sentiment, major.packages$Major)
 
 metrics(cmMAJOR.packages) # acc 49%
 
-save.image('./Models/Senti_Manual_Uni_TFIDF_100518.RData')
+save.image('~/GitHub/NextBigCrypto-Senti/Models/Senti_Manual_Uni_POS_160518.RData')
+load('~/GitHub/NextBigCrypto-Senti/Models/Senti_Manual_Uni_160518.RData')
+
 #load('./Models/Senti_Manual_Uni_TFIDF_working.RData')
 # Uni_Lemma_new pipeline 02.05.2018
 # save.image('./Models/Senti_Manual_Uni_New_2018-05-02.RData')

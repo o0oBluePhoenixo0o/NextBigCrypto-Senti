@@ -16,6 +16,8 @@ if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
 }
 lapply(packages, require, character.only = TRUE)
 
+# library(devtools)
+# install_github("jessevent/crypto")
 # # Functions ---------------------------------------------------------------
 # # Retrieve Coin Listings -----
 # getCoins <- function() {
@@ -122,22 +124,28 @@ coins50 <- read.csv("Top50_Oct7.csv")
 coins50 <- coins50[,-1]
 
 results <- data.frame()
-for (i in 35:nrow(coins50)){
+for (i in 1:nrow(coins50)){
     coin_df <- getCoins(coin = coins50[i,1])
     if (i == 1) {results <- coin_df
     }else{
       results <- bind_rows(results,coin_df)
     }
-    print(paste0('Finish crawling historical data of ',coins50[i,1]))
+    print(paste0('Finish crawling historical data of coin No ',i,' ',coins50[i,1]))
 }
 
-write.csv(finaldf, file, row.names = FALSE)
+results <- unique(results)
 
-data <- read.csv('Crypto-Markets_2018-02-03.csv')
-data$slug <- as.character(data$slug)
-data$symbol <- as.character(data$symbol)
-data$name <- as.character(data$name)
-data$date <- as.Date(data$date)
+# need old dataset due to missing months (CMC only keeps 1 year data)
+# merge both new + old dataset
+# data <- read.csv('Crypto-Markets_2018-03-07.csv')
+# data$slug <- as.character(data$slug)
+# data$symbol <- as.character(data$symbol)
+# data$name <- as.character(data$name)
+# data$date <- as.Date(data$date)
+# 
+# finaldf <- bind_rows(results,data)      
+# finaldf <- unique(finaldf)
 
-finaldf <- bind_rows(results,data)      
-finaldf <- unique(finaldf)
+# Save file to csv
+
+write.csv(results, file, row.names = FALSE)
