@@ -35,71 +35,83 @@ lapply(packages, require, character.only = TRUE)
 #     Prepare dataset     #
 ###########################
 
-# Load BTC 08.05.2018
-BTC <- as.data.frame(read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/1_$BTC_FULL.csv',
-                              locale = locale(encoding = 'latin1'))) %>% 
-  dplyr::select(created_at, status_id, screen_name, user_id, text)
+#######################################################
+# Load new 27.05 BTC.senti
 
-source('~/GitHub/NextBigCrypto-Senti/2. Preprocessing/1. Preprocessing_TW.R')
+BTC.senti <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_senti_2705.csv')
+BTC.senti$status_id <- as.character(BTC.senti$status_id)
+BTC.senti$user_id <- as.character(BTC.senti$user_id)
 
-# Run dataset through preprocessing pipeline
-BTC.clean <- Cleandata(BTC)
-BTC.clean$status_id <- as.character(BTC.clean$status_id)
-BTC.clean$user_id <- as.character(BTC.clean$user_id)
+# # Load BTC 08.05.2018
+# BTC <- as.data.frame(read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/1_$BTC_FULL.csv',
+#                               locale = locale(encoding = 'latin1'))) %>% 
+#   dplyr::select(created_at, status_id, screen_name, user_id, text)
+# 
+# source('~/GitHub/NextBigCrypto-Senti/2. Preprocessing/1. Preprocessing_TW.R')
+# 
+# # Run dataset through preprocessing pipeline
+# BTC.clean <- Cleandata(BTC)
+# BTC.clean$status_id <- as.character(BTC.clean$status_id)
+# BTC.clean$user_id <- as.character(BTC.clean$user_id)
+# 
+# 
+# BTC.clean <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_2205.csv')
+# 
+# ###################################
+# #     Load SA models (trained)    #
+# ###################################
+# 
+# # Using best model so far (GBM-tuned 080518)
+# h2o.init()
+# gbm.model.opt <- h2o.loadModel('./Models/H2O/final_grid_model_1')
+# 
+# # Implement batch-running (in process)
+# i <- 1
+# j <- 50000
+# 
+# while (i <= j) {
+#   # Preprocessing
+#   corp <- VCorpus(VectorSource(BTC.clean$processed[i:j])) # VCorpus compatible with n-gram analysis
+#   # Unigram
+#   frequencies <- DocumentTermMatrix(corp,
+#                                     control = list(weighting = function(x) weightTfIdf(x, normalize = FALSE)))
+#   # Remove these words that are not used very often. Keep terms that appear in 0.5% or more of the dataset
+#   sparse <- removeSparseTerms(frequencies, 0.995)
+#   
+#   # Generate sparse matrix
+#   ResultSparse <- as.data.frame(as.matrix(sparse))
+#   colnames(ResultSparse) <- make.names(colnames(ResultSparse))
+# 
+#   # Convert to H2O format
+#   fullH2O <- as.h2o(ResultSparse)
+#   
+#   # Prediction by batches
+#   predictionsGBM.opt <- as.data.frame(h2o.predict(gbm.model.opt,fullH2O))
+#   
+#   if (i==1){BTC.senti <- cbind(BTC.clean[i:j,], sentiment.trained = predictionsGBM.opt$predict)}
+#   if (i!=1){BTC.senti <- rbind(BTC.senti,cbind(BTC.clean[i:j,],sentiment.trained = predictionsGBM.opt$predict))}
+#   
+#   print(paste0('Complete from ',i,' to ',j,' observations!'))
+#   # increase i and j
+#   i <- i + 50000
+#   ifelse((j + 50000) <= nrow(BTC.clean),j <- j + 50000, j <- nrow(BTC.clean))
+#   
+#   gc()
+#   }
+# h2o.shutdown()
+# gc()
+# 
+# BTC.senti <- BTC.senti %>%
+#   mutate(date = as_datetime(created_at))%>%
+#   select(date, status_id, user_id, screen_name, text, processed, 
+#          botprob, sentiment.trained)
 
-#  temporary
-# write_csv(BTC.clean,'~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_1605.csv')
+### 28.05 Pre-trained
 
-BTC.clean <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_2205.csv')
+BTC.senti <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_senti_trained_2805.csv')
 
-###################################
-#     Load SA models (trained)    #
-###################################
-
-# Using best model so far (GBM-tuned 080518)
-h2o.init()
-gbm.model.opt <- h2o.loadModel('./Models/H2O/final_grid_model_1')
-
-# Implement batch-running (in process)
-i <- 1
-j <- 50000
-
-while (i <= j) {
-  # Preprocessing
-  corp <- VCorpus(VectorSource(BTC.clean$processed[i:j])) # VCorpus compatible with n-gram analysis
-  # Unigram
-  frequencies <- DocumentTermMatrix(corp,
-                                    control = list(weighting = function(x) weightTfIdf(x, normalize = FALSE)))
-  # Remove these words that are not used very often. Keep terms that appear in 0.5% or more of the dataset
-  sparse <- removeSparseTerms(frequencies, 0.995)
-  
-  # Generate sparse matrix
-  ResultSparse <- as.data.frame(as.matrix(sparse))
-  colnames(ResultSparse) <- make.names(colnames(ResultSparse))
-
-  # Convert to H2O format
-  fullH2O <- as.h2o(ResultSparse)
-  
-  # Prediction by batches
-  predictionsGBM.opt <- as.data.frame(h2o.predict(gbm.model.opt,fullH2O))
-  
-  if (i==1){BTC.senti <- cbind(BTC.clean[i:j,], sentiment.trained = predictionsGBM.opt$predict)}
-  if (i!=1){BTC.senti <- rbind(BTC.senti,cbind(BTC.clean[i:j,],sentiment.trained = predictionsGBM.opt$predict))}
-  
-  print(paste0('Complete from ',i,' to ',j,' observations!'))
-  # increase i and j
-  i <- i + 50000
-  ifelse((j + 50000) <= nrow(BTC.clean),j <- j + 50000, j <- nrow(BTC.clean))
-  
-  gc()
-  }
-h2o.shutdown()
-gc()
-
-BTC.senti <- BTC.senti %>%
-  mutate(date = as_datetime(created_at))%>%
-  select(date, status_id, user_id, screen_name, text, processed, 
-         botprob, sentiment.trained)
+BTC.senti$status_id <- as.character(BTC.senti$status_id)
+BTC.senti$user_id <- as.character(BTC.senti$user_id)
 
 # Summarize base on sentiment each day
 # Trained models
@@ -132,7 +144,7 @@ colnames(BTC.senti.trained) <- c('time','count','neg','neu','pos')
 # load price dataset
 token_name <- 'BTC'
 
-price.df <- read.xlsx(paste0('~/GitHub/NextBigCrypto-Senti/1. Crawlers/Historical_Data_HR.xlsx')) %>%
+price.df <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/1. Crawlers/Historical_Data_HR.xlsx') %>%
   filter(symbol == token_name) %>%
   dplyr::select(-date.time)
 
@@ -392,31 +404,22 @@ train_control <- trainControl(## 10-fold CV
 
 #################################
 # Base-line model 
-logitrain <- train
-logitest <- test
-
-logitrain$bin <- ifelse(logitrain$bin == 'up',1,0)
-logitest$bin <- ifelse(logitest$bin == 'up',1,0)
-
-LogiModel <- glm(bin ~., 
-                 data = logitrain, 
-                 family = binomial(link = "logit"))
-
-summary(LogiModel)
+LogiModel <- train(bin ~.,
+                   data = train,
+                   method = "glm",
+                   trControl = train_control)
+LogiModel
 
 # Prediction
 prediction.Logi <- predict(LogiModel, 
-                           newdata= logitest[,2:ncol(logitest)], 
-                           type = "response")
+                           newdata= test[,2:ncol(test)], 
+                           type = "raw")
 prediction.Logi
-
-# Convert to up/down
-prediction.Logi <- ifelse(prediction.Logi < 0.5,'down','up')
 
 confusionMatrix(as.factor(prediction.Logi),test$bin)
 
 cmLogi <- table(test$bin, prediction.Logi)
-metrics(cmLogi) # 50% acc
+metrics(cmLogi)
 
 ########################################
 # Naive Bayes

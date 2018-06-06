@@ -18,7 +18,7 @@ packages <- c("ldatuning", #tuning LDA topic numbers
               "tm", # text mining package
               "textmineR",
               "tidytext",
-              "topicmodels",
+              "topicmodels","tidyr",
               "ggplot2", # plotting package
               "lda","LDAvis","servr"
 )
@@ -31,11 +31,12 @@ lapply(packages, require, character.only = TRUE)
 #########################################################################
 #Input data
 # Update 20.05 with new preprocessing pipeline
-df <- as.data.frame(read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/1_$BTC_FULL.csv',
+df <- as.data.frame(read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/2_$ETH_FULL.csv',
                                 locale = locale(encoding = 'latin1'))) %>% 
   dplyr::select(created_at, status_id, screen_name, user_id, text)
 
-name.df <- 'BTC'
+# ETH on 24.05.2018
+name.df <- 'ETH'
 
 # Load preprocessing file
 source('~/GitHub/NextBigCrypto-Senti/2. Preprocessing/1. Preprocessing_TW.R')
@@ -45,8 +46,8 @@ df$status_id <- as.character(df$status_id)
 df$user_id <- as.character(df$user_id)
 
 # 22.05 clean BTC df
-df <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_2205.csv') %>%
-  filter(created_at < '2018-04-15')
+# df <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_2205.csv') %>%
+#   filter(created_at < '2018-04-15')
 #########################################################################
 text <- df$processed
 corp <- VCorpus(VectorSource(text)) # VCorpus compatible with n-gram analysis
@@ -102,23 +103,32 @@ FindTopicsNumber_plot(result)
 
 result
 # 
-load('~/GitHub/NextBigCrypto-Senti/Models/LDA_BTC_v3_2018-03-03.RData')
-
 # ==> Best for 
 # BCH is 6
-# ETH is 9
-# BTC is 7
+# ETH is 9 ==> 14 (25.05.18)
+# BTC is 7 ==> 18 (25.05.18)
 # XRP is 12
 # LTC is 11
 
-k = 7
+# save.image('~/GitHub/NextBigCrypto-Senti/Models/LDA_ETH_2505.RData')
+load('~/GitHub/NextBigCrypto-Senti/Models/LDA_BTC_2405.RData')
+rm(sparse,corp,df,frequencies) # remove abundant objects
+
+k = 14
 
 # sparse dtm func
-df_lda <- topicmodels::LDA(sparse.new, k, control = list(seed = 1234))
+df_lda <- topicmodels::LDA(sparse.new, 
+                           k,
+                           method = "Gibbs",
+                           control = list(seed = 1234))
+
+# rm(list=setdiff(ls(), c("df_lda"))) #remove everything except BTC.clean
+# save.image('~/GitHub/NextBigCrypto-Senti/Models/BTC_LDA.RData')
 
 # normal dtm func
-df_lda <- topicmodels::LDA(dtm.new, k, control = list(seed = 1234))
-df_lda
+# df_lda <- topicmodels::LDA(dtm.new, k, control = list(seed = 1234))
+# df_lda
+
 # Word-topic probabilities
 df_topics <- tidy(df_lda, matrix = "beta")
 df_topics
@@ -138,10 +148,6 @@ df_top_terms %>%
   facet_wrap(~ topic, scales = "free") +
   coord_flip()
 
-#save.image(file = paste0('LDA_LTC_v3_',Sys.Date(),'.RData'))
-
-# load 080318
-load('./Models/LDA_ETH_v3_2018-03-03.RData')
 ## Build classifier
 df_gamma <- tidy(df_lda, matrix = "gamma")
 df_gamma
@@ -164,6 +170,7 @@ for (i in df_classifications$document){
   maindf[i,which(colnames(maindf)=="topic")] <- df_classifications$topic[i]
 }
 
+gc()
 
 #######################################################################
 # Multiple plot function
