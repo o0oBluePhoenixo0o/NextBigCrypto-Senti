@@ -67,7 +67,8 @@ lapply(packages, require, character.only = TRUE)
 #   dplyr::select(status_id,text,processed,sentiment,trade_senti) %>%
 #   filter(sentiment %in% c(-1,0,1))
 
-manual.df <- read_csv('Manual_Dataset_1405.csv') %>%
+manual.df <- read_csv('Manual_Dataset_1405.csv',
+                      locale = locale(encoding = 'latin1')) %>%
   dplyr::select(status_id,text,processed,sentiment) %>%
   filter(sentiment %in% c(-1,0,1))
 
@@ -90,10 +91,10 @@ manual.df$sentiment <- as.factor(manual.df$sentiment)
 
 #############################
 # Bi-gram 19.04.2018
-BigramTokenizer <- function(x){ unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)}
+# BigramTokenizer <- function(x){ unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)}
 
 # Tri-gram 19.04.2018
-TrigramTokenizer <- function(x){ unlist(lapply(ngrams(words(x), 3), paste, collapse = " "), use.names = FALSE)}
+# TrigramTokenizer <- function(x){ unlist(lapply(ngrams(words(x), 3), paste, collapse = " "), use.names = FALSE)}
 #############################
 
 # Unigram
@@ -102,7 +103,7 @@ TrigramTokenizer <- function(x){ unlist(lapply(ngrams(words(x), 3), paste, colla
 # Change to Bigram or Trigram
 #frequencies <- DocumentTermMatrix(corp, control = list(tokenize = TrigramTokenizer))
 
-# TF-IDF weighting 09.04.2018 (lower acc)
+# TF-IDF weighting 09.04.2018
 frequencies <- DocumentTermMatrix(corp,
                                   control = list(weighting = function(x) weightTfIdf(x, normalize = FALSE)))
 
@@ -124,7 +125,6 @@ testSparse <- subset(ResultSparse, split==FALSE)
 
 h2o.init()
 
-fullH2O <- as.h2o(ResultSparse) # full set
 trainH2O <- as.h2o(trainSparse) # train set
 testH2O <- as.h2o(testSparse) # test set
 
@@ -431,7 +431,6 @@ metrics(cmGBM.opt)
 h2o.saveModel(gbm.model.opt, path = './Models/H2O/', force = TRUE)
 
 # Save R environment
-save.image('~/GitHub/NextBigCrypto-Senti/Models/Senti_GBM_DRF_Optimized_160518.RData')
+save.image('~/GitHub/NextBigCrypto-Senti/Models/Senti_GBM_DRF_Optimized_060618.RData')
 
-# load('~/GitHub/NextBigCrypto-Senti/Models/Senti_GBM_DRF_Optimized_160518.RData')
  

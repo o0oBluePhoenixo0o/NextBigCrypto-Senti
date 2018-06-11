@@ -133,10 +133,10 @@ metrics <- function(cm) {
   return(final)
 }
 ############################
-BTC.clean <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_2805.csv')
-
-BTC.clean$status_id <- as.character(BTC.clean$status_id)
-BTC.clean$user_id <- as.character(BTC.clean$user_id)
+# BTC.clean <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_2805.csv')
+# 
+# BTC.clean$status_id <- as.character(BTC.clean$status_id)
+# BTC.clean$user_id <- as.character(BTC.clean$user_id)
 # 
 # ###################################
 # #     Load SA models (trained)    #
@@ -188,7 +188,8 @@ BTC.clean$user_id <- as.character(BTC.clean$user_id)
 
 ### 28.05 Pre-trained
 
-BTC.senti <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_senti_trained_2805.csv')
+BTC.senti <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_senti_trained_0706.csv',
+                      locale = locale(encoding = 'latin1'))
 
 BTC.senti$status_id <- as.character(BTC.senti$status_id)
 BTC.senti$user_id <- as.character(BTC.senti$user_id)
@@ -201,6 +202,9 @@ token_name <- 'BTC'
 price.df <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/1. Crawlers/Historical_Data_HR.xlsx') %>%
   filter(symbol == token_name) %>%
   dplyr::select(-date.time)
+
+# convert to UTC (20.05.18) -- IMPORTANT!!
+price.df$time <- as_datetime(anytime::anytime(price.df$time))
 
 ###################
 bk <- price.df
@@ -317,6 +321,11 @@ for (y in 1:length(time.set)){
         }
       }
     }
+    
+    # Fill NA value from sentiment with 0 as 0%
+    ## tidyr
+    BTC.senti.trained <- BTC.senti.trained %>%
+      replace(is.na(.), 0)
     
     # Build a training and testing set
     main.df <- inner_join(price.df, BTC.senti.trained, by = 'time')
@@ -473,9 +482,9 @@ for (y in 1:length(time.set)){
 }
 
 # Save final result
-write.xlsx(final.result,'~/GitHub/NextBigCrypto-Senti/3. Models Development/SAT-HP_result.xlsx')
+write.xlsx(final.result,'~/GitHub/NextBigCrypto-Senti/3. Models Development/0. SAT-HP_result.xlsx')
 
 # Save model
-save.image('~/GitHub/NextBigCrypto-Senti/Models/SAT-HP_LOOP_2705.RData')
-load('~/GitHub/NextBigCrypto-Senti/Models/SAT-HP_LOOP_2705.RData')
+save.image('~/GitHub/NextBigCrypto-Senti/Models/SAT-HP_LOOP_0706.RData')
+
 

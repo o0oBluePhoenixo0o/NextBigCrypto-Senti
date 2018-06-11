@@ -135,93 +135,94 @@ metrics <- function(cm) {
 }
 ############################
 # Load BTC full dataset
-BTC <- as.data.frame(read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/1_$BTC_FULL.csv',
-                              locale = locale(encoding = 'latin1'))) %>% 
-  dplyr::select(created_at, status_id, screen_name, user_id, text)
+# BTC <- as.data.frame(read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/1_$BTC_FULL.csv',
+#                               locale = locale(encoding = 'latin1'))) %>% 
+#   dplyr::select(created_at, status_id, screen_name, user_id, text)
 
 source('~/GitHub/NextBigCrypto-Senti/2. Preprocessing/1. Preprocessing_TW.R')
 
-#################################
-# 28.05
-# Load cleaned dataset (already botprob)
-BTC <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_2805.csv',locale = locale(encoding = 'latin1'))
-BTC$status_id <- as.character(BTC$status_id)
-BTC$user_id <- as.character(BTC$user_id)
+#######################################################
+# Load new 07.06 BTC.senti (alr botprob)
+
+BTC.senti.final <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_senti_pkg_0706.csv',
+                      locale = locale(encoding = 'latin1'))
+BTC.senti.final$status_id <- as.character(BTC.senti.final$status_id)
+BTC.senti.final$user_id <- as.character(BTC.senti.final$user_id)
 
 ####################################
 #     Load SA models (packages)    #
 ####################################
-
-# BingLiu Lexicon - best model
-# Pulling in positive and negative wordlists
-# BingLiu
-pos.words <- scan('~/GitHub/NextBigCrypto-Senti/0. Datasets/positive-words.txt', what='character', comment.char=';') #folder with positive dictionary
-neg.words <- scan('~/GitHub/NextBigCrypto-Senti/0. Datasets/negative-words.txt', what='character', comment.char=';') #folder with negative dictionary
-#Adding words to positive and negative databases
-pos.words=c(pos.words, 'Congrats', 'prizes', 'prize', 'thanks', 'thnx', 'Grt', 'thx' ,
-            'gr8', 'plz', 'trending', 'recovering', 'brainstorm', 'leader','pump',
-            'rocket','ath','bullish','bull','undervalued')
-neg.words = c(neg.words, 'Fight', 'fighting', 'wtf', 'arrest', 'no', 'not',
-              'FUD','FOMO','bearish','dump','fear','atl','bear','wth','shit','fuck','dumb',
-              'weakhands','blood','bloody','scam','con-artist','liar','vaporware','shitfork')
-
-#evaluation function
-score.sentiment <- function(sentences, pos.words, neg.words, .progress='none')
-{
-  scores <- plyr::laply(sentences, function(sentence, pos.words, neg.words){
-    # unicode conversion
-    sentence <- trueunicode.hack(sentence)
-    sentence <- gsub("[.,]"," ", sentence, perl = TRUE) #remove . and ,
-    # remove screen name
-    sentences <- str_replace_all(sentence,"@[a-z,A-Z,_]*"," ") 
-    # convert abbreviation
-    sentence <- convertAbbreviations(sentence)
-    sentence <- gsub("[\r\n]", " ", sentence) # fix line breakers
-    
-    #convert to lower-case and remove punctuations with numbers
-    sentence <- gsub( "[^#$a-zA-Z\\s]" , "" , sentence , perl = TRUE ) #remove punc except $
-    sentence <- removeNumbers(tolower(sentence))
-    removeURL <- function(x) rm_url(x, pattern=pastex("@rm_twitter_url", "@rm_url"))
-    sentence <- removeURL(sentence)
-    
-    # split into words. str_split is in the stringr package
-    word.list <- str_split(sentence, '\\s+')
-    
-    # sometimes a list() is one level of hierarchy too much
-    words <- unlist(word.list)
-    
-    # compare our words to the dictionaries of positive & negative terms
-    pos.matches <- match(words, pos.words)
-    neg.matches <- match(words, neg.words)
-    
-    # match() returns the position of the matched term or NA
-    # we just want a TRUE/FALSE:
-    pos.matches <- !is.na(pos.matches)
-    neg.matches <- !is.na(neg.matches)
-    score <- sum(pos.matches) - sum(neg.matches)
-    return(score)
-  }, pos.words, neg.words, .progress=.progress)
-  scores.df <- data.frame(score=scores, message=sentences)
-  return(scores.df)
-}
-
-scores <- score.sentiment(BTC$text, pos.words, neg.words, .progress='text')
-result <- scores
-
-#Add ID to result set
-result$status_id <- as.character(BTC$status_id)
-#add new scores as a column
-result <- mutate(result, status_id, sentiment.packages = ifelse(result$score > 0, 1, 
-                                                                ifelse(result$score < 0, -1, 0)))%>% 
-  dplyr::select(status_id, sentiment.packages)
-
-# Merge to get final sentiment dataset
-BTC.senti.final <- inner_join(BTC, result, by = 'status_id')
-
-BTC.senti.final <- BTC.senti.final %>%
-  mutate(date = as_datetime(created_at))%>%
-  dplyr::select(date, status_id, user_id, screen_name, text, 
-                sentiment.packages)
+# 
+# # BingLiu Lexicon - best model
+# # Pulling in positive and negative wordlists
+# # BingLiu
+# pos.words <- scan('~/GitHub/NextBigCrypto-Senti/0. Datasets/positive-words.txt', what='character', comment.char=';') #folder with positive dictionary
+# neg.words <- scan('~/GitHub/NextBigCrypto-Senti/0. Datasets/negative-words.txt', what='character', comment.char=';') #folder with negative dictionary
+# #Adding words to positive and negative databases
+# pos.words=c(pos.words, 'Congrats', 'prizes', 'prize', 'thanks', 'thnx', 'Grt', 'thx' ,
+#             'gr8', 'plz', 'trending', 'recovering', 'brainstorm', 'leader','pump',
+#             'rocket','ath','bullish','bull','undervalued')
+# neg.words = c(neg.words, 'Fight', 'fighting', 'wtf', 'arrest', 'no', 'not',
+#               'FUD','FOMO','bearish','dump','fear','atl','bear','wth','shit','fuck','dumb',
+#               'weakhands','blood','bloody','scam','con-artist','liar','vaporware','shitfork')
+# 
+# #evaluation function
+# score.sentiment <- function(sentences, pos.words, neg.words, .progress='none')
+# {
+#   scores <- plyr::laply(sentences, function(sentence, pos.words, neg.words){
+#     # unicode conversion
+#     sentence <- trueunicode.hack(sentence)
+#     sentence <- gsub("[.,]"," ", sentence, perl = TRUE) #remove . and ,
+#     # remove screen name
+#     sentences <- str_replace_all(sentence,"@[a-z,A-Z,_]*"," ") 
+#     # convert abbreviation
+#     sentence <- convertAbbreviations(sentence)
+#     sentence <- gsub("[\r\n]", " ", sentence) # fix line breakers
+#     
+#     #convert to lower-case and remove punctuations with numbers
+#     sentence <- gsub( "[^#$a-zA-Z\\s]" , "" , sentence , perl = TRUE ) #remove punc except $
+#     sentence <- removeNumbers(tolower(sentence))
+#     removeURL <- function(x) rm_url(x, pattern=pastex("@rm_twitter_url", "@rm_url"))
+#     sentence <- removeURL(sentence)
+#     
+#     # split into words. str_split is in the stringr package
+#     word.list <- str_split(sentence, '\\s+')
+#     
+#     # sometimes a list() is one level of hierarchy too much
+#     words <- unlist(word.list)
+#     
+#     # compare our words to the dictionaries of positive & negative terms
+#     pos.matches <- match(words, pos.words)
+#     neg.matches <- match(words, neg.words)
+#     
+#     # match() returns the position of the matched term or NA
+#     # we just want a TRUE/FALSE:
+#     pos.matches <- !is.na(pos.matches)
+#     neg.matches <- !is.na(neg.matches)
+#     score <- sum(pos.matches) - sum(neg.matches)
+#     return(score)
+#   }, pos.words, neg.words, .progress=.progress)
+#   scores.df <- data.frame(score=scores, message=sentences)
+#   return(scores.df)
+# }
+# 
+# scores <- score.sentiment(BTC$text, pos.words, neg.words, .progress='text')
+# result <- scores
+# 
+# #Add ID to result set
+# result$status_id <- as.character(BTC$status_id)
+# #add new scores as a column
+# result <- mutate(result, status_id, sentiment.packages = ifelse(result$score > 0, 1, 
+#                                                                 ifelse(result$score < 0, -1, 0)))%>% 
+#   dplyr::select(status_id, sentiment.packages)
+# 
+# # Merge to get final sentiment dataset
+# BTC.senti.final <- inner_join(BTC, result, by = 'status_id')
+# 
+# BTC.senti.final <- BTC.senti.final %>%
+#   mutate(date = as_datetime(created_at))%>%
+#   dplyr::select(date, status_id, user_id, screen_name, text, 
+#                 sentiment.packages)
 
 ##########################
 # load price dataset     #
@@ -232,6 +233,8 @@ price.df <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/1. Crawlers/Historic
   filter(symbol == token_name) %>%
   dplyr::select(-date.time)
 
+# convert to UTC (20.05.18) -- IMPORTANT!!
+price.df$time <- as_datetime(anytime::anytime(price.df$time))
 ###################
 bk <- price.df
 
@@ -346,6 +349,11 @@ for (y in 1:length(time.set)){
         }
       }
     }
+    
+    # Fill NA value from sentiment with 0 as 0%
+    ## tidyr
+    BTC.senti.packages <- BTC.senti.packages %>%
+      replace(is.na(.), 0)
     
     # Build a training and testing set
     main.df <- inner_join(price.df, BTC.senti.packages, by = 'time')
@@ -500,6 +508,6 @@ for (y in 1:length(time.set)){
     gc() # garbage collection
   }
 }
-write_csv(BTC.senti.final,'~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_senti_pkg_2805.csv')
+
 # Save final result
-write.xlsx(final.result,'~/GitHub/NextBigCrypto-Senti/3. Models Development/SAP_result.xlsx')
+write.xlsx(final.result,'~/GitHub/NextBigCrypto-Senti/3. Models Development/0. SAP_result.xlsx')

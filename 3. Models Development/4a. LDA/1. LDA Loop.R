@@ -1,6 +1,4 @@
-# 25.05.2018
-# HP model 2 classes
-# Loop for generating results t-1 ==> t-14 (comparing 6h/12h/24h on F1-score)
+# LDA only model 0706
 
 # clear the environment
 rm(list= ls())
@@ -18,7 +16,13 @@ packages <- c("readr", #read data
               "ggplot2", # plotting package
               "quanteda", #kwic function search phrases
               "stringi", #string manipulation
-              "tidyquant", "openxlsx","anytime",
+              "tm", # text mining package
+              "textmineR",
+              "tidytext",
+              "topicmodels",
+              "ggplot2", # plotting package
+              "lda","LDAvis","servr",
+              "tidyquant", "openxlsx","anytime","tidyr",
               "caTools","caret", "rpart", "h2o","e1071","RWeka","randomForest") # machine learning packages
 
 if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
@@ -131,31 +135,142 @@ metrics <- function(cm) {
                                micro_prf,mcc))
   return(final)
 }
-############################
-# Input data
+############
+# LDA Model
 
-token_name <- 'BTC'
+# BTC LDA
+load('~/GitHub/NextBigCrypto-Senti/Models/BTC_LDA.RData')
 
+###########################
+# Load LDA result 07.06 directly
+#
+
+# # BTC clean 0706
+# BTC.clean <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_0606.csv',
+#                             locale = locale(encoding = 'latin1'))
+# BTC.clean$status_id <- as.character(BTC.clean$status_id)
+# BTC.clean$user_id <- as.character(BTC.clean$user_id)
+
+# # Batch processing
+# # Implement batch-running (in process)
+# BTC.clean$topic <- NA
+# 
+# # Split df into segments for lda[ing]
+# BTC.clean.split <- split(BTC.clean, (seq(nrow(BTC.clean))-1) %/% 10000)
+# BTC.LDA <- BTC.clean[0,]
+# 
+# for (i in 1:length(BTC.clean.split)){
+#   # Preprocessing
+#   corp <- VCorpus(VectorSource(BTC.clean.split[[i]]$processed)) # VCorpus compatible with n-gram analysis
+#   # Unigram
+#   frequencies <- DocumentTermMatrix(corp)
+#   # no need to remove sparse
+#   ui <- unique(frequencies$i)
+#   # backup for merging later
+#   sparse.new <- frequencies[ui,]
+#   test <- BTC.clean.split[[i]][ui,]
+# 
+#   # Apply LDA on batch
+#   predict.LDA <- topicmodels::posterior(df_lda,sparse.new)
+#   top_topic_per_doc <- apply(predict.LDA$topics, 1, which.max)
+#   
+#   #### Reassign topics back to main df
+#   for (k in 1:length(top_topic_per_doc)){
+#     test$topic[k] <- top_topic_per_doc[k]
+#   }
+#   # Merge for final dataset
+#   BTC.LDA <- rbind(BTC.LDA,test)
+#   
+#   print(paste0('Completed LDA for batch ',i,'/',length(BTC.clean.split)))
+#   gc()
+# }
+
+# save LDA file
+# write_csv(BTC.LDA,'~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_LDA_0706.csv')
+BTC.LDA <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_LDA_0706.csv',
+                    locale = locale(encoding = 'latin1'))
+BTC.LDA$user_id <- as.character(BTC.LDA$user_id)
+BTC.LDA$status_id <- as.character(BTC.LDA$status_id)
+
+
+###############################
+#     Load price dataset      #
+###############################
 ##########################
 # load price dataset
+token_name <- 'BTC'
 
 price.df <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/1. Crawlers/Historical_Data_HR.xlsx') %>%
   filter(symbol == token_name) %>%
   dplyr::select(-date.time)
 
+# convert to UTC (20.05.18) -- IMPORTANT!!
+price.df$time <- as_datetime(anytime::anytime(price.df$time))
+
 ###################
 bk <- price.df
 
 final.result <- data.frame('Type_hr' = character(),
-                        'Time' = character(),
-                        'Accuracy' = numeric(),
-                        'F1_score' = numeric(), 
-                        'Algo' = character())
+                           'Time' = character(),
+                           'Accuracy' = numeric(),
+                           'F1_score' = numeric(), 
+                           'Algo' = character())
 time.set <- c(6,12,24)
 
+# Make a list of drop.cols for loop later
+mintopic <- min(BTC.LDA$topic)
+maxtopic <- max(BTC.LDA$topic)
+
+drop.cols <- c('countT')
+for (i in mintopic:maxtopic){
+  eval(drop.cols <- c(drop.cols,paste0('topic_',i)))
+}
+
+# put "topic" in front of number
+BTC.LDA$topic <- paste0('topic_',BTC.LDA$topic)
+# BTC.LDA.df <- BTC.LDA %>%
+#   dplyr::rename(date = created_at) %>%
+#   dplyr::select(date, topic) %>%
+#   group_by(time = floor_date(date, paste0(time.slot,' hour')),
+#            topic) %>%
+#   summarize(count = n()) %>%
+#   group_by(time) %>%
+#   mutate(countT = sum(count)) %>%
+#   group_by(topic) %>%
+#   mutate(per = round(100* count/countT,2))
+
+###############
+#
+# MAIN LOOP 
+#
+###############
+
 for (y in 1:length(time.set)){
+  
   time.slot <- time.set[y] # insert trigger
-  price.df <- bk # get backup for price.df
+  price.df <- bk           # get backup for price.df
+  
+  # Summarize base on topics allocation each day
+  # Filter Topic base on time.slot
+  BTC.LDA.df <- BTC.LDA %>%
+    dplyr::rename(date = created_at) %>%
+    dplyr::select(date, topic) %>%
+    group_by(time = floor_date(date, paste0(time.slot,' hour')),
+             topic) %>%
+    summarize(count = n()) %>%
+    group_by(time) %>%
+    mutate(countT = sum(count)) %>%
+    group_by(topic) %>%
+    mutate(per = round(100* count/countT,2))
+  
+  # Convert to each topic = column
+  BTC.LDA.df <- reshape2::dcast(BTC.LDA.df, time + countT ~ topic,
+                                       value.var = 'per')
+  # Keep colnames for later loop
+  name <- colnames(BTC.LDA.df)
+  name <- name[-1] # except date-time column
+  #########################################
+  # Price.df
   
   # filter out 24-hr mark
   price.df$mark <- NA
@@ -200,22 +315,44 @@ for (y in 1:length(time.set)){
     
     x <- z/(time.slot/24)
     
-    for (i in 1:x){
-      eval(parse(text = paste0('price.df$t_', i,' <- NA')))
-    }
-    
-    for (i in 1:nrow(price.df)){
-      for (j in 1:x){
-        eval(parse(text = paste0('price.df$t_', j,' <- as.factor(lag(price.df$bin,',j,'))')))
-      }
-    }
+    ## SAT Model only no need for price t-1 => t-14
+    # for (i in 1:x){
+    #   eval(parse(text = paste0('price.df$t_', i,' <- NA')))
+    # }
+    # 
+    # for (i in 1:nrow(price.df)){
+    #   for (j in 1:x){
+    #     eval(parse(text = paste0('price.df$t_', j,' <- as.factor(lag(price.df$bin,',j,'))')))
+    #   }
+    # }
     
     # Convert to categorical variables
     price.df$bin <- as.factor(price.df$bin)
     
+    #############################################################
+    # LDA dataset
+    for (k in 1:length(name)){
+      # Create 14x4 features
+      # Generate columns through loop
+      for (i in 1:x){
+        eval(parse(text = paste0('BTC.LDA.df$',name[k],'_', i,' <- NA')))
+      }
+      
+      for (i in 1:nrow(BTC.LDA.df)){
+        for (j in 1:x){
+          eval(parse(text = paste0('BTC.LDA.df$',name[k],'_', j,' <- lag(BTC.LDA.df$',name[k],',',j,')')))
+        }
+      }
+    }
+    
+    # Build a training and testing set
+    main.df <- inner_join(price.df, BTC.LDA.df, by = 'time')
+    main.df <- unique(main.df)
     # Build a training and testing set.
-    main.df <- price.df %>% 
-      dplyr::select(-time,-close,-priceBTC,-pricediff,-diff)
+    main.df <- main.df %>%
+      dplyr::select(-time,-close,-diff,-pricediff,
+                    -priceBTC) %>%
+      dplyr::select(-one_of(drop.cols))
     
     # Remove NA 
     main.df <- main.df[complete.cases(main.df),]
@@ -234,12 +371,11 @@ for (y in 1:length(time.set)){
       number = 10)
     
     #################################
-    # Base-line model (GLM with Stepwise Feature Selection)
-    
+    # Base-line model (GLM)
     LogiModel <- train(bin ~.,
-                  data = train,
-                  method = "glm",
-                  trControl = train_control)
+                       data = train,
+                       method = "glm",
+                       trControl = train_control)
     LogiModel
     
     # Prediction
@@ -360,8 +496,12 @@ for (y in 1:length(time.set)){
     final.result <- rbind(final.result,result)
     
     print(paste0('Complete model type ',time.set[y],'-hr on time t-',z,'. Best model is ',model,' with ',acc,' accuracy and ',f1,' F1-score.'))
+    gc() # garbage collection
   }
 }
-# Save final result
 
-write.xlsx(final.result,'~/GitHub/NextBigCrypto-Senti/3. Models Development/0. HP_result.xlsx')
+# Save final result
+write.xlsx(final.result,'~/GitHub/NextBigCrypto-Senti/3. Models Development/0. LDA_result.xlsx')
+
+# Save model
+save.image('~/GitHub/NextBigCrypto-Senti/Models/LDA_LOOP_0706.RData')
