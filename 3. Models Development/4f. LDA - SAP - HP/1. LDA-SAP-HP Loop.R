@@ -134,78 +134,22 @@ metrics <- function(cm) {
   return(final)
 }
 
-
-############################
-# BTC.clean <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_2805.csv')
-# 
-# BTC.clean$status_id <- as.character(BTC.clean$status_id)
-# BTC.clean$user_id <- as.character(BTC.clean$user_id)
-# 
-
 ######################
 # LDA Model
 ######################
-# BTC LDA
-load('~/GitHub/NextBigCrypto-Senti/Models/BTC_LDA.RData')
 
-###########################
-# Load LDA result 07.06 directly
-###########################
+token_name <- 'BTC'
 
-# BTC clean 0706
-# BTC.clean <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_0606.csv',
-#                             locale = locale(encoding = 'latin1'))
-# BTC.clean$status_id <- as.character(BTC.clean$status_id)
-# BTC.clean$user_id <- as.character(BTC.clean$user_id)
-# 
-# # Batch processing
-# # Implement batch-running (in process)
-# i <- 1
-# j <- 10000
-# BTC.clean$topic <- NA
-# 
-# BTC.LDA <- BTC.clean[0,]
-# 
-# while (i <= j) {
-#   # Preprocessing
-#   corp <- VCorpus(VectorSource(BTC.clean$processed[i:j])) # VCorpus compatible with n-gram analysis
-#   # Unigram
-#   frequencies <- DocumentTermMatrix(corp)
-#   
-#   # no need to remove sparse
-#   ui <- unique(frequencies$i)
-#   # backup for merging later
-#   test <- BTC.clean[ui,]
-#   sparse.new <- frequencies[ui,]
-#   
-#   # Apply LDA on batch
-#   predict.LDA <- topicmodels::posterior(df_lda,sparse.new)
-#   top_topic_per_doc <- apply(predict.LDA$topics, 1, which.max)
-#   
-#   #### Reassign topics back to main df
-#   for (k in 1:length(top_topic_per_doc)){
-#     test$topic[k] <- top_topic_per_doc[k]
-#   }
-#   
-#   BTC.LDA <- rbind(BTC.LDA,test)
-#   
-#   print(paste0('Completed LDA from ',i,' to ',j,' observations!'))
-#   # increase i and j
-#   i <- i + 10000
-#   ifelse((j + 10000) <= nrow(BTC.clean),j <- j + 10000, j <- nrow(BTC.clean))
-#   gc()
-# }
-
-# save LDA file
-# write_csv(BTC.LDA,'~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_LDA_0706.csv')
-BTC.LDA <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_LDA_0706.csv',
-                    locale = locale(encoding = 'latin1'))
-BTC.LDA$user_id <- as.character(BTC.LDA$user_id)
-BTC.LDA$status_id <- as.character(BTC.LDA$status_id)
+files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
+                    pattern = paste0('^',token_name,'_clean_LDA_'))
+df.LDA <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
+                   locale = locale(encoding = 'latin1'))
+df.LDA$status_id <- as.character(df.LDA$status_id)
+df.LDA$user_id <- as.character(df.LDA$user_id)
 
 # Make a list of drop.cols for loop later
-mintopic <- min(BTC.LDA$topic)
-maxtopic <- max(BTC.LDA$topic)
+mintopic <- min(df.LDA$topic)
+maxtopic <- max(df.LDA$topic)
 
 drop.cols <- c('countT')
 for (i in mintopic:maxtopic){
@@ -213,68 +157,23 @@ for (i in mintopic:maxtopic){
 }
 
 # put "topic" in front of number
-BTC.LDA$topic <- paste0('topic_',BTC.LDA$topic)
+df.LDA$topic <- paste0('topic_',df.LDA$topic)
 
-# ###################################
-# #     Load SA models (trained)    #
-# ###################################
-# 
-# # Using best model so far (GBM-tuned 080518)
-# h2o.init()
-# gbm.model.opt <- h2o.loadModel('./Models/H2O/final_grid_model_1')
-# 
-# # Implement batch-running (in process)
-# i <- 1
-# j <- 50000
-# 
-# while (i <= j) {
-#   # Preprocessing
-#   corp <- VCorpus(VectorSource(BTC.clean$processed[i:j])) # VCorpus compatible with n-gram analysis
-#   # Unigram
-#   frequencies <- DocumentTermMatrix(corp,
-#                                     control = list(weighting = function(x) weightTfIdf(x, normalize = FALSE)))
-#   # Remove these words that are not used very often. Keep terms that appear in 0.5% or more of the dataset
-#   sparse <- removeSparseTerms(frequencies, 0.995)
-#   
-#   # Generate sparse matrix
-#   ResultSparse <- as.data.frame(as.matrix(sparse))
-#   colnames(ResultSparse) <- make.names(colnames(ResultSparse))
-#   
-#   # Convert to H2O format
-#   fullH2O <- as.h2o(ResultSparse)
-#   
-#   # Prediction by batches
-#   predictionsGBM.opt <- as.data.frame(h2o.predict(gbm.model.opt,fullH2O))
-#   
-#   if (i==1){BTC.senti <- cbind(BTC.clean[i:j,], sentiment.packages = predictionsGBM.opt$predict)}
-#   if (i!=1){BTC.senti <- rbind(BTC.senti,cbind(BTC.clean[i:j,],sentiment.packages = predictionsGBM.opt$predict))}
-#   
-#   print(paste0('Complete from ',i,' to ',j,' observations!'))
-#   # increase i and j
-#   i <- i + 50000
-#   ifelse((j + 50000) <= nrow(BTC.clean),j <- j + 50000, j <- nrow(BTC.clean))
-#   
-#   gc()
-# }
-# h2o.shutdown()
-# 
-# BTC.senti <- BTC.senti %>%
-#   mutate(date = as_datetime(created_at))%>%
-#   select(date, status_id, user_id, screen_name, text, processed, 
-#          botprob, sentiment.packages)
+# ####################################
+# #     Load SA models (packages)    #
+# ####################################
 
-### 07.06 Pre-trained
-
-BTC.senti <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_senti_pkg_0706.csv',
-                      locale = locale(encoding = 'latin1'))
-
-BTC.senti$status_id <- as.character(BTC.senti$status_id)
-BTC.senti$user_id <- as.character(BTC.senti$user_id)
+# Load new 07.06 df.senti
+files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
+                    pattern = paste0('^',token_name,'_clean_senti_pkg_'))
+df.senti <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
+                     locale = locale(encoding = 'latin1'))
+df.senti$status_id <- as.character(df.senti$status_id)
+df.senti$user_id <- as.character(df.senti$user_id)
 
 ##########################
 # load Price dataset     #
 ##########################
-token_name <- 'BTC'
 
 price.df <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/1. Crawlers/Historical_Data_HR.xlsx') %>%
   filter(symbol == token_name) %>%
@@ -307,7 +206,7 @@ for (y in 1:length(time.set)){
   
   ## LDA + SENTI
   # Get total + percentage of each class / day
-  BTC.senti.packages <- BTC.senti %>% 
+  df.senti.packages <- df.senti %>% 
     dplyr::select(date,sentiment.packages) %>%
     group_by(time = floor_date(date, paste0(time.slot,' hour')),
              sentiment.packages) %>%
@@ -318,7 +217,7 @@ for (y in 1:length(time.set)){
     mutate(per = round(100* count/countT,2))
   
   # Per / topic
-  BTC.LDA.df <- BTC.LDA %>% 
+  df.LDA.df <- df.LDA %>% 
     dplyr::rename(date = created_at) %>%
     dplyr::select(date, topic) %>%
     group_by(time = floor_date(date, paste0(time.slot,' hour')),
@@ -330,18 +229,18 @@ for (y in 1:length(time.set)){
     mutate(per.tp = round(100* count/countT,2))
   
   # Convert to each sentiment = column
-  BTC.LDA.df <- reshape2::dcast(BTC.LDA.df, time + countT ~ topic,
+  df.LDA.df <- reshape2::dcast(df.LDA.df, time + countT ~ topic,
                                 value.var = 'per.tp')
   
-  BTC.senti.packages <- reshape2::dcast(BTC.senti.packages, time + countT ~ sentiment.packages,
+  df.senti.packages <- reshape2::dcast(df.senti.packages, time + countT ~ sentiment.packages,
                                        value.var = 'per')
-  colnames(BTC.senti.packages) <- c('time','count','neg','neu','pos')
+  colnames(df.senti.packages) <- c('time','count','neg','neu','pos')
   
   # Merge senti + LDA
-  BTC.senti.LDA.df <- inner_join(BTC.senti.packages, BTC.LDA.df, by = 'time')
+  df.senti.LDA.df <- inner_join(df.senti.packages, df.LDA.df, by = 'time')
   
   # Keep colnames for later loop
-  name <- colnames(BTC.senti.LDA.df)
+  name <- colnames(df.senti.LDA.df)
   name <- name[-1] # except date-time column
   #########################################
   # Price.df
@@ -363,10 +262,16 @@ for (y in 1:length(time.set)){
   
   # calculate differences between close prices of each transaction dates
   price.df$pricediff <- 0
-  
-  for (i in 2:nrow(price.df)){
-    price.df$pricediff[i] <- price.df$close[i] - price.df$close[i-1]
+  if (token_name == 'BTC'){
+    for (i in 2:nrow(price.df)){
+      price.df$pricediff[i] <- price.df$close[i] - price.df$close[i-1]
+    }
   }
+  if (token_name != 'BTC'){
+    for (i in 2:nrow(price.df)){
+      price.df$pricediff[i] <- price.df$priceBTC[i] - price.df$priceBTC[i-1]
+    }
+  }  
   
   ###########
   # BINNING #
@@ -376,8 +281,15 @@ for (y in 1:length(time.set)){
   price.df$bin <- NA
   
   # Assigning bin to main dataframe
-  for (i in 2:nrow(price.df)){
-    price.df$diff[i] <- round(((price.df$close[i]-price.df$close[i-1])/price.df$close[i])*100,2)
+  if (token_name == 'BTC'){
+    for (i in 2:nrow(price.df)){
+      price.df$diff[i] <- round(((price.df$close[i]-price.df$close[i-1])/price.df$close[i])*100,2)
+    }
+  }
+  if (token_name != 'BTC'){
+    for (i in 2:nrow(price.df)){
+      price.df$diff[i] <- round(((price.df$priceBTC[i]-price.df$priceBTC[i-1])/price.df$priceBTC[i])*100,2)
+    }
   }
   
   # This version only split 2 classes
@@ -409,23 +321,23 @@ for (y in 1:length(time.set)){
       # Create 14 days features
       # Generate columns through loop
       for (i in 1:x){
-        eval(parse(text = paste0('BTC.senti.LDA.df$',name[k],'_', i,' <- NA')))
+        eval(parse(text = paste0('df.senti.LDA.df$',name[k],'_', i,' <- NA')))
       }
       
-      for (i in 1:nrow(BTC.senti.LDA.df)){
+      for (i in 1:nrow(df.senti.LDA.df)){
         for (j in 1:x){
-          eval(parse(text = paste0('BTC.senti.LDA.df$',name[k],'_', j,' <- lag(BTC.senti.LDA.df$',name[k],',',j,')')))
+          eval(parse(text = paste0('df.senti.LDA.df$',name[k],'_', j,' <- lag(df.senti.LDA.df$',name[k],',',j,')')))
         }
       }
     }
     
     # Fill NA value from sentiment with 0 as 0%
     ## tidyr
-    BTC.senti.LDA.df <- BTC.senti.LDA.df %>%
+    df.senti.LDA.df <- df.senti.LDA.df %>%
       replace(is.na(.), 0)
     
     # Build a training and testing set
-    main.df <- inner_join(price.df, BTC.senti.LDA.df, by = 'time')
+    main.df <- inner_join(price.df, df.senti.LDA.df, by = 'time')
     main.df <- unique(main.df)
     # Build a training and testing set.
     main.df <- main.df %>%
@@ -581,9 +493,6 @@ for (y in 1:length(time.set)){
 }
 
 # Save final result
-write.xlsx(final.result,'~/GitHub/NextBigCrypto-Senti/3. Models Development/0. LDA-SAP-HP_result.xlsx')
-
-# Save model
-save.image('~/GitHub/NextBigCrypto-Senti/Models/LDA-SAP-HP_LOOP_0806.RData')
+write.xlsx(final.result,paste0('~/GitHub/NextBigCrypto-Senti/3. Models Development/0.',token_name,'_LDA_SAP_HP_result.xlsx'))
 
 

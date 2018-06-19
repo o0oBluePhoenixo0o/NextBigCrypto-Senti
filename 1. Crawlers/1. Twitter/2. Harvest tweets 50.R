@@ -4,24 +4,26 @@
 # 3. Store in separate folder for analysis
 
 options("scipen"=100, "digits"=4)
-
+gc()
 # Set up working directory
 setwd("~/GitHub/NextBigCrypto-Senti/1. Crawlers")
 
 # Clear environment
 rm(list = ls())
+
 # devtools::install_github("mkearney/rtweet")
+
 # install packages if not available
 packages <- c('rtweet','twitteR', #Twitter API crawlers
-              'tesseract', 'magick', #image processing
-              'data.table','dplyr','scales','ggplot2','taskscheduleR',
+              'data.table','dplyr','scales','ggplot2',
               'httr','stringr','rvest','curl','lubridate','coinmarketcapr',
-              'gtools','readr')
+              'gtools','readr','botrnot')
 if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
   install.packages(setdiff(packages, rownames(installed.packages())))
 }
 lapply(packages, require, character.only = TRUE)
 
+# devtools::install_github("mkearney/botrnot")
 # 1. Get coin list --------------------------------------------
 # Obtain list of coins --> extract tickers + coin names 
 # devtools::install_github("amrrs/coinmarketcapr")
@@ -35,43 +37,44 @@ lapply(packages, require, character.only = TRUE)
 # coins_list <- coins_list[1:50,]
 # write.csv(coins_list,"Top50_Oct7.csv")
 
-coins_list <- read.csv("Top50_Oct7.csv")
+coins_list <- read.csv("~/GitHub/NextBigCrypto-Senti/1. Crawlers/Top50_Oct7.csv")
+
 #---------------------------------------------------------------
 # Function to swap Twitter Auth between 4 keys when entry rate runs out
-swap_auth <- function(x){
-  if (x == 1){
-    # 1
-    consumer_key <- 'cdi1LlwgzdXzR4Wxz8T3Gude6'
-    consumer_secret <- 's3hpLYXs9ULY1YwzyTRP8aRovp3rvkjUM9ue9usi8MotrvUgOG'
-    access_token <- '240771509-MQiqGMegj3B4ohmRSi7mThfprMg7j9lAYkDB3s9W'
-    access_token_secret <- 'YZGMyJ6Jz3Ncx1SG59QXJGaRrEkYjvCTC71KPsFH2eaIi'
-    setup_twitter_oauth(consumer_key,consumer_secret,access_token,access_token_secret)
-  }
-  if (x == 2){
-    # 2
-    consumer_key <- 'yO6HMXQfaAazZfdyOQpPicX0M'
-    consumer_secret <- 'wT1lq9bd7WWJjoVw3aHKfdHbpdjxd8r8RKc56fGiQPGRaJgILP'
-    access_token <- '379008223-8gPeX8OJ5wxjILXYUMxKwTSOH30UJbYdUWNqCE53'
-    access_token_secret <- 'P3anD6dTrrQb6RUP4Me6HAMpgY8RU9QuORCrGI14f1Wis'
-    setup_twitter_oauth(consumer_key,consumer_secret,access_token,access_token_secret)
-  }
-  if (x == 3){
-    # 3
-    consumer_key="hNgXlxwQYcL71SxCddwvpTEVf"
-    consumer_secret="ZSXtL7Yq5QwkAvyCnm9hACaC6CosyHUOOnewv2ufL6IG8tQBCU"
-    access_token="838380485843763200-pAQXVTl89Dn1Pz2GnQzOacBmJnXPZz6"
-    access_token_secret="MtqyBbhUxM0zOTJIuRXUWtZMRmVnnjfFT0rs5X4odItdq"
-    setup_twitter_oauth(consumer_key,consumer_secret,access_token,access_token_secret)
-  }
-  if (x == 4){
-    # 4
-    consumer_key <- "zow0fQ6Lv0j79gx4lDhBKVUDu"
-    consumer_secret = "fp33fr0VBkIIoPzpwgbCPemkZJ1E718TFqb8b86DKd0nVgGFEs"
-    access_token = "836598863582617600-Tjmc0MqCtcOZVjx9dto5wSBkdRgxDmh"
-    access_token_secret = "57THIHAlttLUf3y8x1P5U2JnQmcDIfDqq8xmZrwgD5Qo6"
-    setup_twitter_oauth(consumer_key,consumer_secret,access_token,access_token_secret)
-  }
-}
+# swap_auth <- function(x){
+#   if (x == 1){
+#     # 1
+#     consumer_key <- 'cdi1LlwgzdXzR4Wxz8T3Gude6'
+#     consumer_secret <- 's3hpLYXs9ULY1YwzyTRP8aRovp3rvkjUM9ue9usi8MotrvUgOG'
+#     access_token <- '240771509-MQiqGMegj3B4ohmRSi7mThfprMg7j9lAYkDB3s9W'
+#     access_token_secret <- 'YZGMyJ6Jz3Ncx1SG59QXJGaRrEkYjvCTC71KPsFH2eaIi'
+#     setup_twitter_oauth(consumer_key,consumer_secret,access_token,access_token_secret)
+#   }
+#   if (x == 2){
+#     # 2
+#     consumer_key <- 'yO6HMXQfaAazZfdyOQpPicX0M'
+#     consumer_secret <- 'wT1lq9bd7WWJjoVw3aHKfdHbpdjxd8r8RKc56fGiQPGRaJgILP'
+#     access_token <- '379008223-8gPeX8OJ5wxjILXYUMxKwTSOH30UJbYdUWNqCE53'
+#     access_token_secret <- 'P3anD6dTrrQb6RUP4Me6HAMpgY8RU9QuORCrGI14f1Wis'
+#     setup_twitter_oauth(consumer_key,consumer_secret,access_token,access_token_secret)
+#   }
+#   # if (x == 3){
+#   #   # 3
+#   #   consumer_key="hNgXlxwQYcL71SxCddwvpTEVf"
+#   #   consumer_secret="ZSXtL7Yq5QwkAvyCnm9hACaC6CosyHUOOnewv2ufL6IG8tQBCU"
+#   #   access_token="838380485843763200-pAQXVTl89Dn1Pz2GnQzOacBmJnXPZz6"
+#   #   access_token_secret="MtqyBbhUxM0zOTJIuRXUWtZMRmVnnjfFT0rs5X4odItdq"
+#   #   setup_twitter_oauth(consumer_key,consumer_secret,access_token,access_token_secret)
+#   # }
+#   if (x == 4){
+#     # 4
+#     consumer_key <- "zow0fQ6Lv0j79gx4lDhBKVUDu"
+#     consumer_secret = "fp33fr0VBkIIoPzpwgbCPemkZJ1E718TFqb8b86DKd0nVgGFEs"
+#     access_token = "836598863582617600-Tjmc0MqCtcOZVjx9dto5wSBkdRgxDmh"
+#     access_token_secret = "57THIHAlttLUf3y8x1P5U2JnQmcDIfDqq8xmZrwgD5Qo6"
+#     setup_twitter_oauth(consumer_key,consumer_secret,access_token,access_token_secret)
+#   }
+# }
 
 
 # Function to crawl tweets for top 50 tickers
@@ -91,7 +94,7 @@ get_tweets <- function(i,ticker,n,TW_key){
   setwd("~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/Weekly")
   files <- list.files(pattern = paste0('^',i,'_'))
   max_count <- length(files)
-  
+  gc() # garbage collection
   old_df <- fread(dir(pattern=paste0('^',i,'_'))[1])
 
   for (k in max_count:2){
@@ -156,24 +159,34 @@ get_tweets <- function(i,ticker,n,TW_key){
 }
 
 # assign Twitter Auth key before crawling
-TW_key <- 1
+# TW_key <- 1
 
 # Get twitter auth 14.02.2018
-twitter_token <- create_token(
-  app = 'CryptoSentiTomo',
-  consumer_key = 'cdi1LlwgzdXzR4Wxz8T3Gude6',
-  consumer_secret = 's3hpLYXs9ULY1YwzyTRP8aRovp3rvkjUM9ue9usi8MotrvUgOG')
-
+# twitter_token <- create_token(
+#   app = 'CryptoSentiTomo',
+#   consumer_key = 'cdi1LlwgzdXzR4Wxz8T3Gude6',
+#   consumer_secret = 's3hpLYXs9ULY1YwzyTRP8aRovp3rvkjUM9ue9usi8MotrvUgOG')
+# 
+# rm(twitter_token)
+# 
+# twitter_token <- create_token(
+#   app = '',
+#   consumer_key <- "zow0fQ6Lv0j79gx4lDhBKVUDu",
+#   consumer_secret = "fp33fr0VBkIIoPzpwgbCPemkZJ1E718TFqb8b86DKd0nVgGFEs")
+# 
 
 # Since normally it would stop at # 36 - 37 ==> split into 2 pack with timeout 10 mins
-for (i in 1:nrow(coins_list)){
+
+#28.05.2018
+for (i in 1:nrow(coins_list)){  
   get_tweets(coins_list$X[i],as.character(coins_list$ticker[i]),100000, TW_key)
+  gc()
   # TW_key <- TW_key +1
   # if (TW_key == 5){
   #   Sys.sleep(720)
   #   TW_key <- 1} # sleep 12 mins every 5 auth used
 }
-# 
+
 # setwd("~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/Weekly")
 # files <- list.files(pattern = paste0('^',1,'_'))
 # max_count <- length(files)
@@ -195,3 +208,4 @@ for (i in 1:nrow(coins_list)){
 #                     retryonratelimit = TRUE)
 # 
 # test <- search_tweets('$BTC',10)
+

@@ -135,6 +135,7 @@ metrics <- function(cm) {
 # Input data
 
 token_name <- 'BTC'
+compare.w.BTC <- 1 # choose whether compare price in BTC or USD ( 1 = BTC, 0 = USD)
 
 ##########################
 # load price dataset
@@ -170,15 +171,20 @@ for (y in 1:length(time.set)){
   
   price.df <- price.df %>% 
     filter(mark == 1) %>%
-    dplyr::select(time,close,priceBTC)
+    dplyr::select(time,close,priceBTC,-mark)
   
   # calculate differences between close prices of each transaction dates
   price.df$pricediff <- 0
-  
-  for (i in 2:nrow(price.df)){
-    price.df$pricediff[i] <- price.df$close[i] - price.df$close[i-1]
+  if (token_name == 'BTC' | compare.w.BTC == 0){
+    for (i in 2:nrow(price.df)){
+      price.df$pricediff[i] <- price.df$close[i] - price.df$close[i-1]
+    }
   }
-  
+  if (token_name != 'BTC' & compare.w.BTC == 1){
+    for (i in 2:nrow(price.df)){
+      price.df$pricediff[i] <- price.df$priceBTC[i] - price.df$priceBTC[i-1]
+    }
+  }  
   ###########
   # BINNING #
   ###########
@@ -187,8 +193,15 @@ for (y in 1:length(time.set)){
   price.df$bin <- NA
   
   # Assigning bin to main dataframe
-  for (i in 2:nrow(price.df)){
-    price.df$diff[i] <- round(((price.df$close[i]-price.df$close[i-1])/price.df$close[i])*100,2)
+  if (token_name == 'BTC' | compare.w.BTC == 0){
+    for (i in 2:nrow(price.df)){
+      price.df$diff[i] <- round(((price.df$close[i]-price.df$close[i-1])/price.df$close[i])*100,2)
+    }
+  }
+  if (token_name != 'BTC' & compare.w.BTC == 1){
+    for (i in 2:nrow(price.df)){
+      price.df$diff[i] <- round(((price.df$priceBTC[i]-price.df$priceBTC[i-1])/price.df$priceBTC[i])*100,2)
+    }
   }
   
   # This version only split 2 classes
@@ -362,6 +375,6 @@ for (y in 1:length(time.set)){
     print(paste0('Complete model type ',time.set[y],'-hr on time t-',z,'. Best model is ',model,' with ',acc,' accuracy and ',f1,' F1-score.'))
   }
 }
-# Save final result
 
-write.xlsx(final.result,'~/GitHub/NextBigCrypto-Senti/3. Models Development/0. HP_result.xlsx')
+# Save final result
+write.xlsx(final.result,paste0('~/GitHub/NextBigCrypto-Senti/3. Models Development/Results/0.',token_name,'_HP_result.xlsx'))

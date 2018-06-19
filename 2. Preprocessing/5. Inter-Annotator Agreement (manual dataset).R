@@ -51,9 +51,9 @@ manual.df <- cbind(
 )
 
 
-kappa2(manual.df[,c(3,4)], "unweighted") # almost good 0.84
+kappa2(manual.df[,c(3,4)], "unweighted") # too good 0.967
 
 # Since we have > 2 raters ==> use Fleiss's Kappa 
-kappam.fleiss(manual.df[,c(1,3,4)]) # 0.462 --> keep this one
+kappam.fleiss(manual.df[,c(1,3,4)]) # 0.622 --> keep this one
 
-kappam.fleiss(manual.df) # 0.292
+kappam.fleiss(manual.df) # 0.2363

@@ -136,4 +136,4 @@ repeat{
 }
 
 # -------------------------------------------------------------
-# Can only crawl back until 3rd May 2017 due to API limitation
+# Can only crawl back from 3rd May 2017 due to API limitation

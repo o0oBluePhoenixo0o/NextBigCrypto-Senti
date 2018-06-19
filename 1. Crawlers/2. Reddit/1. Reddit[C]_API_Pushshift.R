@@ -155,24 +155,31 @@ reddit.crypto <- reddit.crypto  %>%
 
 ###########################
 
-comments.df <- read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/2b. Reddit Report/Crypto_Reddit_comments[BK].csv')
+comments.df <- read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/2b. Reddit Report/Crypto_Reddit_comments.csv')
+
+comments.old <- comments.df  %>%
+  dplyr::select(post_id) %>%
+  distinct()
+# Filter to get new submission from crawling
+new.reddit.crypto <- anti_join(reddit.crypto, comments.old, by = 'post_id') %>%
+  filter(num_comments !=0 & post_score !=0)
 
 # Start crawling
 tryCatch({
-  for (i in 1:nrow(reddit.crypto)){
+  for (i in 1:nrow(new.reddit.crypto)){
     
-    post_id <- reddit.crypto$post_id[i]
+    post_id <- new.reddit.crypto$post_id[i]
     
     # Check if submission has been added
-    flag <- comments.df %>% filter(post_id == reddit.crypto$post_id[i]) %>% tally 
+    flag <- comments.df %>% filter(post_id == new.reddit.crypto$post_id[i]) %>% tally 
     flag <- flag$n
     if (flag !=0){
-      print(paste0('Already crawled comments for post ',post_id,' at position ',i,'/',nrow(reddit.crypto)))
+      print(paste0('Already crawled comments for post ',post_id,' at position ',i,'/',nrow(new.reddit.crypto)))
       next} # already exist ==> skip
     
     comments_data <- crawl_comments(post_id)
     if (comments_data != 0){
-      print(paste0('Complete crawling comments for post ',post_id,' with ',nrow(comments_data),' comments at position ',i,'/',nrow(reddit.crypto)))
+      print(paste0('Complete crawling comments for post ',post_id,' with ',nrow(comments_data),' comments at position ',i,'/',nrow(new.reddit.crypto)))
       # Create comments dataframe
       if (i==1){
         comments.df <- comments_data
@@ -182,7 +189,7 @@ tryCatch({
       gc()
     }
     if (comments_data == 0){
-      print(paste0('Complete crawling comments for post ',post_id,' with 0 comment at position ',i,'/',nrow(reddit.crypto)))
+      print(paste0('Complete crawling comments for post ',post_id,' with 0 comment at position ',i,'/',nrow(new.reddit.crypto)))
     }
     if (i %% 2000 == 0){
       write_csv(comments.df, '~/GitHub/NextBigCrypto-Senti/1. Crawlers/2b. Reddit Report/Crypto_Reddit_comments[BK].csv')
@@ -200,7 +207,7 @@ tryCatch({
 final.df <- right_join(reddit.crypto, comments.df, by = 'post_id')
 
 # save.image(paste0('~/GitHub/NextBigCrypto-Senti/Crypto_Reddit_',Sys.Date(),'.RData'))
-load('~/GitHub/NextBigCrypto-Senti/Crypto_Reddit_2018-05-30.RData')
+#load('~/GitHub/NextBigCrypto-Senti/Crypto_Reddit_2018-05-30.RData')
 
 #######################################################################
 #######################################################################

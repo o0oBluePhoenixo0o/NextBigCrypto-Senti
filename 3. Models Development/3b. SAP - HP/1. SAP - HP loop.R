@@ -133,103 +133,25 @@ metrics <- function(cm) {
   return(final)
 }
 ############################
-# Load BTC full dataset
-# BTC <- as.data.frame(read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/1_$BTC_FULL.csv',
-#                               locale = locale(encoding = 'latin1'))) %>% 
-#   dplyr::select(created_at, status_id, screen_name, user_id, text)
-
 source('~/GitHub/NextBigCrypto-Senti/2. Preprocessing/1. Preprocessing_TW.R')
 
 #######################################################
-# Load new 07.06 BTC.senti (alr botprob)
+# Load new df.senti (alr botprob)
+token_name <- 'BTC'
+compare.w.BTC <- 1 # choose whether compare price in BTC or USD ( 1 = BTC, 0 = USD)
 
-BTC.senti.final <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_senti_pkg_0706.csv',
-                            locale = locale(encoding = 'latin1'))
-BTC.senti.final$status_id <- as.character(BTC.senti.final$status_id)
-BTC.senti.final$user_id <- as.character(BTC.senti.final$user_id)
-
-####################################
-#     Load SA models (packages)    #
-####################################
-# 
-# # BingLiu Lexicon - best model
-# # Pulling in positive and negative wordlists
-# # BingLiu
-# pos.words <- scan('~/GitHub/NextBigCrypto-Senti/0. Datasets/positive-words.txt', what='character', comment.char=';') #folder with positive dictionary
-# neg.words <- scan('~/GitHub/NextBigCrypto-Senti/0. Datasets/negative-words.txt', what='character', comment.char=';') #folder with negative dictionary
-# #Adding words to positive and negative databases
-# pos.words=c(pos.words, 'Congrats', 'prizes', 'prize', 'thanks', 'thnx', 'Grt', 'thx' ,
-#             'gr8', 'plz', 'trending', 'recovering', 'brainstorm', 'leader','pump',
-#             'rocket','ath','bullish','bull','undervalued')
-# neg.words = c(neg.words, 'Fight', 'fighting', 'wtf', 'arrest', 'no', 'not',
-#               'FUD','FOMO','bearish','dump','fear','atl','bear','wth','shit','fuck','dumb',
-#               'weakhands','blood','bloody','scam','con-artist','liar','vaporware','shitfork')
-# 
-# #evaluation function
-# score.sentiment <- function(sentences, pos.words, neg.words, .progress='none')
-# {
-#   scores <- plyr::laply(sentences, function(sentence, pos.words, neg.words){
-#     # unicode conversion
-#     sentence <- trueunicode.hack(sentence)
-#     sentence <- gsub("[.,]"," ", sentence, perl = TRUE) #remove . and ,
-#     # remove screen name
-#     sentences <- str_replace_all(sentence,"@[a-z,A-Z,_]*"," ") 
-#     # convert abbreviation
-#     sentence <- convertAbbreviations(sentence)
-#     sentence <- gsub("[\r\n]", " ", sentence) # fix line breakers
-#     
-#     #convert to lower-case and remove punctuations with numbers
-#     sentence <- gsub( "[^#$a-zA-Z\\s]" , "" , sentence , perl = TRUE ) #remove punc except $
-#     sentence <- removeNumbers(tolower(sentence))
-#     removeURL <- function(x) rm_url(x, pattern=pastex("@rm_twitter_url", "@rm_url"))
-#     sentence <- removeURL(sentence)
-#     
-#     # split into words. str_split is in the stringr package
-#     word.list <- str_split(sentence, '\\s+')
-#     
-#     # sometimes a list() is one level of hierarchy too much
-#     words <- unlist(word.list)
-#     
-#     # compare our words to the dictionaries of positive & negative terms
-#     pos.matches <- match(words, pos.words)
-#     neg.matches <- match(words, neg.words)
-#     
-#     # match() returns the position of the matched term or NA
-#     # we just want a TRUE/FALSE:
-#     pos.matches <- !is.na(pos.matches)
-#     neg.matches <- !is.na(neg.matches)
-#     score <- sum(pos.matches) - sum(neg.matches)
-#     return(score)
-#   }, pos.words, neg.words, .progress=.progress)
-#   scores.df <- data.frame(score=scores, message=sentences)
-#   return(scores.df)
-# }
-# 
-# scores <- score.sentiment(BTC$text, pos.words, neg.words, .progress='text')
-# result <- scores
-# 
-# #Add ID to result set
-# result$status_id <- as.character(BTC$status_id)
-# #add new scores as a column
-# result <- mutate(result, status_id, sentiment.packages = ifelse(result$score > 0, 1, 
-#                                                                 ifelse(result$score < 0, -1, 0)))%>% 
-#   dplyr::select(status_id, sentiment.packages)
-# 
-# # Merge to get final sentiment dataset
-# BTC.senti.final <- inner_join(BTC, result, by = 'status_id')
-# 
-# BTC.senti.final <- BTC.senti.final %>%
-#   mutate(date = as_datetime(created_at))%>%
-#   dplyr::select(date, status_id, user_id, screen_name, text, 
-#                 sentiment.packages)
+files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
+                    pattern = paste0('^',token_name,'_clean_senti_pkg_'))
+df.senti.final <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
+                           locale = locale(encoding = 'latin1'))
+df.senti.final$status_id <- as.character(df.senti.final$status_id)
+df.senti.final$user_id <- as.character(df.senti.final$user_id)
 
 ##########################
 # load price dataset     #
 ##########################
-token_name <- 'BTC'
-
 price.df <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/1. Crawlers/Historical_Data_HR.xlsx') %>%
-  filter(symbol == token_name) %>%
+  filter(symbol== token_name) %>%
   dplyr::select(-date.time)
 
 # convert to UTC (20.05.18) -- IMPORTANT!!
@@ -257,7 +179,7 @@ for (y in 1:length(time.set)){
   
   # Summarize base on sentiment each day
   # Packages models
-  BTC.senti.packages <- BTC.senti.final %>% 
+  df.senti.packages <- df.senti.final %>% 
     dplyr::select(date,sentiment.packages) %>%
     group_by(time = floor_date(date, paste0(time.slot,' hour')),
              sentiment.packages) %>%
@@ -268,9 +190,9 @@ for (y in 1:length(time.set)){
     mutate(per = round(100* count/countT,2))
   
   # Convert to each sentiment = column
-  BTC.senti.packages <- dcast(BTC.senti.packages, time + countT ~ sentiment.packages , 
+  df.senti.packages <- dcast(df.senti.packages, time + countT ~ sentiment.packages , 
                               value.var = 'per')
-  colnames(BTC.senti.packages) <- c('time','count','neg','neu','pos')
+  colnames(df.senti.packages) <- c('time','count','neg','neu','pos')
   
   ## Price dataframe
   # filter out 24-hr mark
@@ -286,15 +208,20 @@ for (y in 1:length(time.set)){
   
   price.df <- price.df %>% 
     filter(mark == 1) %>%
-    dplyr::select(time,close,priceBTC)
+    dplyr::select(time,close,priceBTC,-mark)
   
   # calculate differences between close prices of each transaction dates
   price.df$pricediff <- 0
-  
-  for (i in 2:nrow(price.df)){
-    price.df$pricediff[i] <- price.df$close[i] - price.df$close[i-1]
+  if (token_name == 'BTC' | compare.w.BTC == 0){
+    for (i in 2:nrow(price.df)){
+      price.df$pricediff[i] <- price.df$close[i] - price.df$close[i-1]
+    }
   }
-  
+  if (token_name != 'BTC' & compare.w.BTC == 1){
+    for (i in 2:nrow(price.df)){
+      price.df$pricediff[i] <- price.df$priceBTC[i] - price.df$priceBTC[i-1]
+    }
+  }  
   ###########
   # BINNING #
   ###########
@@ -303,8 +230,15 @@ for (y in 1:length(time.set)){
   price.df$bin <- NA
   
   # Assigning bin to main dataframe
-  for (i in 2:nrow(price.df)){
-    price.df$diff[i] <- round(((price.df$close[i]-price.df$close[i-1])/price.df$close[i])*100,2)
+  if (token_name == 'BTC' | compare.w.BTC == 0){
+    for (i in 2:nrow(price.df)){
+      price.df$diff[i] <- round(((price.df$close[i]-price.df$close[i-1])/price.df$close[i])*100,2)
+    }
+  }
+  if (token_name != 'BTC' & compare.w.BTC == 1){
+    for (i in 2:nrow(price.df)){
+      price.df$diff[i] <- round(((price.df$priceBTC[i]-price.df$priceBTC[i-1])/price.df$priceBTC[i])*100,2)
+    }
   }
   
   # This version only split 2 classes
@@ -337,23 +271,23 @@ for (y in 1:length(time.set)){
       # Create 14x4 sentiment features
       # Generate columns through loop
       for (i in 1:x){
-        eval(parse(text = paste0('BTC.senti.packages$',name[k],'_', i,' <- NA')))
+        eval(parse(text = paste0('df.senti.packages$',name[k],'_', i,' <- NA')))
       }
       
-      for (i in 1:nrow(BTC.senti.packages)){
+      for (i in 1:nrow(df.senti.packages)){
         for (j in 1:x){
-          eval(parse(text = paste0('BTC.senti.packages$',name[k],'_', j,' <- lag(BTC.senti.packages$',name[k],',',j,')')))
+          eval(parse(text = paste0('df.senti.packages$',name[k],'_', j,' <- lag(df.senti.packages$',name[k],',',j,')')))
         }
       }
     }
     
     # Fill NA value from sentiment with 0 as 0%
     ## tidyr
-    BTC.senti.packages <- BTC.senti.packages %>%
+    df.senti.packages <- df.senti.packages %>%
       replace(is.na(.), 0)
     
     # Build a training and testing set
-    main.df <- inner_join(price.df, BTC.senti.packages, by = 'time')
+    main.df <- inner_join(price.df, df.senti.packages, by = 'time')
     main.df <- unique(main.df)
     # Build a training and testing set.
     main.df <- main.df %>%
@@ -507,4 +441,4 @@ for (y in 1:length(time.set)){
 }
 
 # Save final result
-write.xlsx(final.result,'~/GitHub/NextBigCrypto-Senti/3. Models Development/0. SAP-HP_result.xlsx')
+write.xlsx(final.result,paste0('~/GitHub/NextBigCrypto-Senti/3. Models Development/0.',token_name,'_SAP-HP_result.xlsx'))

@@ -1,7 +1,4 @@
-# 27.05.2018
-# SAP
-# Loop for generating results day t-1 ==> t-14 (comparing 6h/12h/24h on Accuracy & F1-score)
-# No price features
+# LDA only model 0706
 
 # clear the environment
 rm(list= ls())
@@ -19,8 +16,13 @@ packages <- c("readr", #read data
               "ggplot2", # plotting package
               "quanteda", #kwic function search phrases
               "stringi", #string manipulation
-              "tidyquant", "openxlsx","anytime",
-              "tm", #text mining package
+              "tm", # text mining package
+              "textmineR",
+              "tidytext",
+              "topicmodels",
+              "ggplot2", # plotting package
+              "lda","LDAvis","servr",
+              "tidyquant", "openxlsx","anytime","tidyr",
               "caTools","caret", "rpart", "h2o","e1071","RWeka","randomForest") # machine learning packages
 
 if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
@@ -133,35 +135,30 @@ metrics <- function(cm) {
                                micro_prf,mcc))
   return(final)
 }
-############################
-# Load BTC full dataset
-# BTC <- as.data.frame(read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/1_$BTC_FULL.csv',
-#                               locale = locale(encoding = 'latin1'))) %>% 
-#   dplyr::select(created_at, status_id, screen_name, user_id, text)
+###########################
+# Load LDA result directly
+#
 
-source('~/GitHub/NextBigCrypto-Senti/2. Preprocessing/1. Preprocessing_TW.R')
-
-#######################################################
-# Load new df.senti (alr botprob)
-token_name <- 'ETH'
-compare.w.BTC <- 1 # choose whether compare price in BTC or USD ( 1 = BTC, 0 = USD)
+token_name <- 'BTC'
 
 files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
-                    pattern = paste0('^',token_name,'_clean_senti_pkg_'))
-df.senti.final <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
-                             locale = locale(encoding = 'latin1'))
-df.senti.final$status_id <- as.character(df.senti.final$status_id)
-df.senti.final$user_id <- as.character(df.senti.final$user_id)
+                    pattern = paste0('^',token_name,'_clean_LDA_'))
+df.LDA <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
+                   locale = locale(encoding = 'latin1'))
+df.LDA$status_id <- as.character(df.LDA$status_id)
+df.LDA$user_id <- as.character(df.LDA$user_id)
 
-##########################
-# load price dataset     #
-##########################
+###############################
+#     Load price dataset      #
+###############################
+
 price.df <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/1. Crawlers/Historical_Data_HR.xlsx') %>%
   filter(symbol == token_name) %>%
   dplyr::select(-date.time)
 
 # convert to UTC (20.05.18) -- IMPORTANT!!
 price.df$time <- as_datetime(anytime::anytime(price.df$time))
+
 ###################
 bk <- price.df
 
@@ -171,6 +168,18 @@ final.result <- data.frame('Type_hr' = character(),
                            'F1_score' = numeric(), 
                            'Algo' = character())
 time.set <- c(6,12,24)
+
+# Make a list of drop.cols for loop later
+mintopic <- min(df.LDA$topic)
+maxtopic <- max(df.LDA$topic)
+
+drop.cols <- c('countT')
+for (i in mintopic:maxtopic){
+  eval(drop.cols <- c(drop.cols,paste0('topic_',i)))
+}
+
+# put "topic" in front of number
+df.LDA$topic <- paste0('topic_',df.LDA$topic)
 
 ###############
 #
@@ -183,24 +192,28 @@ for (y in 1:length(time.set)){
   time.slot <- time.set[y] # insert trigger
   price.df <- bk           # get backup for price.df
   
-  # Summarize base on sentiment each day
-  # Packages models
-  df.senti.packages <- df.senti.final %>% 
-    dplyr::select(date,sentiment.packages) %>%
+  # Summarize base on topics allocation each day
+  # Filter Topic base on time.slot
+  df.LDA.df <- df.LDA %>%
+    dplyr::rename(date = created_at) %>%
+    dplyr::select(date, topic) %>%
     group_by(time = floor_date(date, paste0(time.slot,' hour')),
-             sentiment.packages) %>%
-    summarize(count = n()) %>% 
-    group_by(time) %>% 
+             topic) %>%
+    summarize(count = n()) %>%
+    group_by(time) %>%
     mutate(countT = sum(count)) %>%
-    group_by(sentiment.packages) %>%
+    group_by(topic) %>%
     mutate(per = round(100* count/countT,2))
   
-  # Convert to each sentiment = column
-  df.senti.packages <- dcast(df.senti.packages, time + countT ~ sentiment.packages , 
-                              value.var = 'per')
-  colnames(df.senti.packages) <- c('time','count','neg','neu','pos')
+  # Convert to each topic = column
+  df.LDA.df <- reshape2::dcast(df.LDA.df, time + countT ~ topic,
+                               value.var = 'per')
+  # Keep colnames for later loop
+  name <- colnames(df.LDA.df)
+  name <- name[-1] # except date-time column
+  #########################################
+  # Price.df
   
-  ## Price dataframe
   # filter out 24-hr mark
   price.df$mark <- NA
   
@@ -214,20 +227,21 @@ for (y in 1:length(time.set)){
   
   price.df <- price.df %>% 
     filter(mark == 1) %>%
-    dplyr::select(time,close,priceBTC,-mark)
+    dplyr::select(time,close,priceBTC)
   
   # calculate differences between close prices of each transaction dates
   price.df$pricediff <- 0
-  if (token_name == 'BTC' | compare.w.BTC == 0){
+  if (token_name == 'BTC'){
     for (i in 2:nrow(price.df)){
       price.df$pricediff[i] <- price.df$close[i] - price.df$close[i-1]
     }
   }
-  if (token_name != 'BTC' & compare.w.BTC == 1){
+  if (token_name != 'BTC'){
     for (i in 2:nrow(price.df)){
       price.df$pricediff[i] <- price.df$priceBTC[i] - price.df$priceBTC[i-1]
     }
-  }  
+  } 
+  
   ###########
   # BINNING #
   ###########
@@ -236,12 +250,12 @@ for (y in 1:length(time.set)){
   price.df$bin <- NA
   
   # Assigning bin to main dataframe
-  if (token_name == 'BTC' | compare.w.BTC == 0){
+  if (token_name == 'BTC'){
     for (i in 2:nrow(price.df)){
       price.df$diff[i] <- round(((price.df$close[i]-price.df$close[i-1])/price.df$close[i])*100,2)
     }
   }
-  if (token_name != 'BTC' & compare.w.BTC == 1){
+  if (token_name != 'BTC'){
     for (i in 2:nrow(price.df)){
       price.df$diff[i] <- round(((price.df$priceBTC[i]-price.df$priceBTC[i-1])/price.df$priceBTC[i])*100,2)
     }
@@ -256,51 +270,33 @@ for (y in 1:length(time.set)){
     
     x <- z/(time.slot/24)
     
-    ## SAP model no need for price features
-    
-    # for (i in 1:x){
-    #   eval(parse(text = paste0('price.df$t_', i,' <- NA')))
-    # }
-    # 
-    # for (i in 1:nrow(price.df)){
-    #   for (j in 1:x){
-    #     eval(parse(text = paste0('price.df$t_', j,' <- as.factor(lag(price.df$bin,',j,'))')))
-    #   }
-    # }
-    
     # Convert to categorical variables
     price.df$bin <- as.factor(price.df$bin)
+    
     #############################################################
-    # Sentiment Analysis dataset
-    
-    name <- c('count','pos','neg','neu')
-    
+    # LDA dataset
     for (k in 1:length(name)){
-      # Create 14x4 sentiment features
+      # Create 14x4 features
       # Generate columns through loop
       for (i in 1:x){
-        eval(parse(text = paste0('df.senti.packages$',name[k],'_', i,' <- NA')))
+        eval(parse(text = paste0('df.LDA.df$',name[k],'_', i,' <- NA')))
       }
       
-      for (i in 1:nrow(df.senti.packages)){
+      for (i in 1:nrow(df.LDA.df)){
         for (j in 1:x){
-          eval(parse(text = paste0('df.senti.packages$',name[k],'_', j,' <- lag(df.senti.packages$',name[k],',',j,')')))
+          eval(parse(text = paste0('df.LDA.df$',name[k],'_', j,' <- lag(df.LDA.df$',name[k],',',j,')')))
         }
       }
     }
     
-    # Fill NA value from sentiment with 0 as 0%
-    ## tidyr
-    df.senti.packages <- df.senti.packages %>%
-      replace(is.na(.), 0)
-    
     # Build a training and testing set
-    main.df <- inner_join(price.df, df.senti.packages, by = 'time')
+    main.df <- inner_join(price.df, df.LDA.df, by = 'time')
     main.df <- unique(main.df)
     # Build a training and testing set.
     main.df <- main.df %>%
       dplyr::select(-time,-close,-diff,-pricediff,
-                    -count,-neg,-neu,-pos,-priceBTC)
+                    -priceBTC) %>%
+      dplyr::select(-one_of(drop.cols))
     
     # Remove NA 
     main.df <- main.df[complete.cases(main.df),]
@@ -449,4 +445,5 @@ for (y in 1:length(time.set)){
 }
 
 # Save final result
-write.xlsx(final.result,paste0('~/GitHub/NextBigCrypto-Senti/3. Models Development/0.',token_name,'_SAP_result.xlsx'))
+write.xlsx(final.result,paste0('~/GitHub/NextBigCrypto-Senti/3. Models Development/0.',token_name,'_LDA_result.xlsx'))
+

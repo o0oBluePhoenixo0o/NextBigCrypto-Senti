@@ -19,16 +19,11 @@ rm(list = ls())
 packages <- c('rtweet','twitteR', #Twitter API crawlers
               'data.table','dplyr','scales','ggplot2',
               'httr','stringr','rvest','curl','lubridate','coinmarketcapr',
-              'gtools','readr','botrnot')
+              'gtools','readr','botrnot','openxlsx')
 if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
   install.packages(setdiff(packages, rownames(installed.packages())))
 }
 lapply(packages, require, character.only = TRUE)
-
-# if use openxlsx
-# ZIP PATH for dev tools
-if(devtools::find_rtools()) Sys.setenv(R_ZIPCMD= file.path(devtools:::get_rtools_path(),"zip"))
-library(openxlsx)
 
 ####################################################################
 # Read top 50 data (Oct 7 2017)
@@ -57,13 +52,22 @@ for (i in 1:nrow(coins_list)){
 final.user_list <- unique(final.user_list)
 final.user_list$botprob <- NA
 
-# Set working directory back to Models folder
-setwd("~/GitHub/NextBigCrypto-Senti/Models")
+# Set working directory back to Datasets folder
+setwd("~/GitHub/NextBigCrypto-Senti/0. Datasets")
+
+### Update 16.06 to check on new users
+current <- read.xlsx('~/GitHub/NextBigCrypto-Senti/0. Datasets/Twitter_Bot_Users_(Final).xlsx')
+bk <- final.user_list
+final.user_list <- anti_join(final.user_list,current, by = 'screen_name')
+###
+
+## In progress
+final.user_list <- openxlsx::read.xlsx('~/GitHub/NextBigCrypto-Senti/0. Datasets/Twitter_Bot_Users_(Working).xlsx')
 
 # Determine whether a Twitter ID is a bot or not (probability - gradient boosting machine)
 j <- 0 #counter
 
-for (i in 113055:nrow(final.user_list)){
+for (i in 11515:nrow(final.user_list)){
   if (is.na(final.user_list$botprob[i]) == FALSE) { 
     print(paste0('Already analyzed user ',final.user_list$screen_name[i],' at position: ',i))
     next}
@@ -80,15 +84,12 @@ for (i in 113055:nrow(final.user_list)){
     final.user_list$botprob[i] <- botrnot(final.user_list$screen_name[i])$prob_bot
   }, error=function(e){cat("User position ",i," has ERROR :",conditionMessage(e), "\n")})
   
-  print(paste0('Scanning user ',i,' at position ',j,' in queue'))
+  print(paste0('Scanning user ',i,' at position ',j,' in queue of ',nrow(final.user_list)))
   j <- j + 1 #increase counter
   
 }
 
+final.user_list <- bind_rows(current,final.user_list)
+  
 # Save final user list
-write.xlsx(final.user_list,paste0('Twitter_Bot_Users_(Final).xlsx'))
-save.image(paste0('Twitter_Bot_Final_',Sys.Date(),'.RData'))
-
-# setwd("~/GitHub/NextBigCrypto-Senti")
-# final.user_list <- read.xlsx('./Models/Twitter_Bot_Users_(Working).xlsx')
-# final.user_list$botprob <- as.numeric(final.user_list$botprob)
+write.xlsx(final.user_list,'Twitter_Bot_Users_(Final).xlsx')

@@ -18,7 +18,7 @@ packages <- c("ldatuning", #tuning LDA topic numbers
               "tm", # text mining package
               "textmineR",
               "tidytext",
-              "topicmodels",
+              "topicmodels","tidyr",
               "ggplot2", # plotting package
               "lda","LDAvis","servr"
 )
@@ -28,68 +28,90 @@ if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
 }
 lapply(packages, require, character.only = TRUE)
 
-
 #########################################################################
 #Input data
-# Update 20.05 with new preprocessing pipeline
-df <- as.data.frame(read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/1_$BTC_FULL.csv',
-                                locale = locale(encoding = 'latin1'))) %>% 
-  dplyr::select(created_at, status_id, screen_name, user_id, text)
+# pick correct token
+symbol <- 'ETH'
+# Load full dataset
+# Read in coin list as Oct 17
+coins_list <- read.csv("~/GitHub/NextBigCrypto-Senti/1. Crawlers/Top50_Oct7.csv")
+position <- match(symbol, coins_list$symbol) # get position in queue
 
-name.df <- 'BTC'
+files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/',
+                    pattern = paste0('^',position,'_'))
+# Load full dataset
+df.full <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/',files),
+                    locale = locale(encoding = 'latin1')) %>%
+  dplyr::select(created_at, status_id,user_id, screen_name, text)
 
-# Load preprocessing file
-source('~/GitHub/NextBigCrypto-Senti/2. Preprocessing/1. Preprocessing_TW.R')
+###################################################
+# load "cleaned" dataset
+files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets',
+                    pattern = paste0('^',symbol,'_'))
+df.clean <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/',files),
+                     locale = locale(encoding = 'latin1'))
+df.clean$status_id <- as.character(df.clean$status_id)
+df.clean$user_id <- as.character(df.clean$user_id)
 
-df <- Cleandata(df)
-df$status_id <- as.character(df$status_id)
-df$user_id <- as.character(df$user_id)
-
-# 15.05 clean BTC df
-df <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_1605.csv')
 #########################################################################
+text <- df.clean$processed
+corp <- VCorpus(VectorSource(text)) # VCorpus compatible with n-gram analysis
 
+# Unigram
+frequencies <- DocumentTermMatrix(corp)
 
+# Remove these words that are not used very often. Keep terms that appear in 1% or more of the dataset
+sparse <- removeSparseTerms(frequencies, 0.99)
 
-# Alr know result (28.02.2018)
-dtm <- CreateDtm(test,
-                 doc_names = c(1:length(test)),
-                 ngram_window = c(1, 1),
-                 lower = FALSE,
-                 remove_punctuation = FALSE,
-                 remove_numbers = FALSE)
+ui <- unique(sparse$i)
+sparse.new <- sparse[ui,]
 
-rowTotals <- rowSums(dtm) #Find the sum of words in each Document
-dtm.new   <- dtm[rowTotals> 0, ]           #remove all docs without words
+gc() # garbage collector
 
 result <- FindTopicsNumber(
-  dtm.new,
-  topics = seq(from = 2, to = 20, by = 1),
+  sparse.new,
+  topics = seq(from = 2, to = 20, by = 2),
   metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"),
   method = "Gibbs",
-  control = list(seed = 77),
-  mc.cores = 2L,
+  control = list(seed = 1234),
+  mc.cores = 1L,
   verbose = TRUE
 )
+
+gc()
 ############################################################
 # minimization for Arun and Cao Juan
 # maximization for Griffiths and Deveaud
 FindTopicsNumber_plot(result)
 
 result
-
+# 
 # ==> Best for 
 # BCH is 6
-# ETH is 9
-# BTC is 7
+# ETH is 9 ==> 14 (25.05.18)
+# BTC is 7 ==> 18 (25.05.18)
 # XRP is 12
 # LTC is 11
-# reuse dtm.new from RData LDATune
 
-k = 9
+# save.image('~/GitHub/NextBigCrypto-Senti/Models/LDA_ETH_2505.RData')
+load('~/GitHub/NextBigCrypto-Senti/Models/LDA_BTC_2405.RData')
+rm(sparse,corp,df,frequencies) # remove abundant objects
 
-df_lda <- LDA(dtm.new, k, control = list(seed = 1234))
-df_lda
+k = 14
+
+# sparse dtm func
+df_lda <- topicmodels::LDA(sparse.new, 
+                           k,
+                           method = "Gibbs",
+                           control = list(seed = 1234))
+
+# rm(list=setdiff(ls(), c("df_lda"))) #remove everything except BTC.clean
+# save.image('~/GitHub/NextBigCrypto-Senti/Models/BTC_LDA.RData')
+
+# normal dtm func
+# df_lda <- topicmodels::LDA(dtm.new, k, control = list(seed = 1234))
+# df_lda
+
 # Word-topic probabilities
 df_topics <- tidy(df_lda, matrix = "beta")
 df_topics
@@ -109,10 +131,6 @@ df_top_terms %>%
   facet_wrap(~ topic, scales = "free") +
   coord_flip()
 
-#save.image(file = paste0('LDA_LTC_v3_',Sys.Date(),'.RData'))
-
-# load 080318
-load('./Models/LDA_ETH_v3_2018-03-03.RData')
 ## Build classifier
 df_gamma <- tidy(df_lda, matrix = "gamma")
 df_gamma
@@ -135,6 +153,7 @@ for (i in df_classifications$document){
   maindf[i,which(colnames(maindf)=="topic")] <- df_classifications$topic[i]
 }
 
+gc()
 
 #######################################################################
 # Multiple plot function
@@ -191,7 +210,7 @@ maindf <- maindf[,which(colnames(maindf) %in% c('created_at','processed','topic'
 
 ##########################
 # Loading price data
-market.data <- crypto::getCoins(name.df)
+market.data <- crypto::getCoins(symbol)
 
 start_date <- min(as.Date(maindf$created_at))
 end_date <- max(as.Date(maindf$created_at))
@@ -225,7 +244,7 @@ plot.senti <- function(df,topicnum){
     geom_line(size = 1.5) +
     geom_smooth(method = "lm", se = FALSE, lty = 2) +
     expand_limits(y = 0) +
-    ggtitle(paste0('Sentiment in ',name.df,' (',topicnum,')')) +
+    ggtitle(paste0('Sentiment in ',symbol,' (',topicnum,')')) +
     labs(x = "Date", y = "Percent") +
     theme(legend.position="top")
   
@@ -233,10 +252,10 @@ plot.senti <- function(df,topicnum){
     ggplot(aes(date,close)) +
     geom_line(size = 1.5) +
     labs(x = "Date", y = "Price") +
-    ggtitle(paste0(name.df,' Price'))
+    ggtitle(paste0(symbol,' Price'))
   
   setwd("~/GitHub/NextBigCrypto-Senti/x. Documents/images")
-  png(paste0('LDA_',name.df,'_',topicnum,'_',Sys.Date(),'.png'),width=800, height=800)
+  png(paste0('LDA_',symbol,'_',topicnum,'_',Sys.Date(),'.png'),width=800, height=800)
   # plot charts
   multiplot(senti,price, cols = 1)
   dev.off()

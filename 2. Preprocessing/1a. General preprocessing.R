@@ -64,8 +64,8 @@ clean_reddit <- function(df){
   return(processed.df)
 }
 
-crypto.df <- read.csv("1. Crawlers/2b. Reddit Report/Crypto_Reddit.csv")
-crypto_market.df <- read.csv("1. Crawlers/2b. Reddit Report/CryptoMarkets_Reddit.csv")
+crypto.df <- readr::read_csv("~/GitHub/NextBigCrypto-Senti/1. Crawlers/2b. Reddit Report/Crypto_Reddit.csv")
+crypto_market.df <- readr::read_csv("~/GitHub/NextBigCrypto-Senti/1. Crawlers/2b. Reddit Report/CryptoMarkets_Reddit.csv")
 
 processed.crypto <- clean_reddit(crypto.df)
 processed_market.crypto <- clean_reddit(crypto_market.df)
@@ -179,8 +179,96 @@ sparse <- removeSparseTerms(frequencies, 0.995)
 tweetsSparse <- as.data.frame(as.matrix(sparse))
 colnames(tweetsSparse) <- make.names(colnames(tweetsSparse))
 
-
 #######################################################################
+# REDDIT PREPROCESSING CLEAN DATA 12.06.2018
+#######################################################################
+
+
+comments.df <- readr::read_csv('~/GitHub/NextBigCrypto-Senti/1. Crawlers/2b. Reddit Report/Crypto_Reddit_comments.csv')
+Cleandata.RD <- function(df) {
+  # remove duplicates base on contents
+  df <- df[!duplicated(df$com_content),]
+  
+  df$processed <- sapply(df$com_content, function(x) removeURL(x)) # remove URL
+  # To lower case
+  df$processed <- sapply(df$processed, function(x) tolower(x))
+  df$processed <- sapply(df$processed, function(x) gsub("[.,]"," ", x, perl = TRUE)) #remove . and ,
+  
+  
+  # Remove duplicates 
+  df <- df[!duplicated(df$processed),]
+  
+  # converting abbreviations
+  df$processed <- sapply(df$processed, function(x) convertAbbreviations(x))
+  df$processed <- sapply(df$processed, function(x) conv_fun(x)) # convert to delete emojis
+  df$processed <- sapply(df$processed, function(x) gsub("[\r\n]", " ", x)) #change /r /n break lines into space
+  
+  # remove stopwords - create exception lists 25.04
+  exceptions   <- c('up','down','all','above','below','under','over',
+                    'few','more', 'in')
+  # keep negation list
+  negations <- grep(pattern = "not|n't", x = stopwords(), value = TRUE)
+  exceptions <- c(exceptions,negations)
+  
+  my_stopwords <- setdiff(stopwords("en"), exceptions)
+  
+  df$processed <- sapply(df$processed, function(x) removeWords(x,c(my_stopwords))) 
+  
+  ###########################################
+  
+  # Get rid of references to other screennames
+  df$processed <- str_replace_all(df$processed,"@[a-z,A-Z,_]*"," ")  
+  
+  # remove punctuations
+  df$processed <- sapply(df$processed, function(x) gsub( "[^a-zA-Z\\s]" , "" , x , perl = TRUE ))
+  
+  # Apply Apos to space
+  df$processed <- sapply(df$processed, function(x) AposToSpace(x)) 
+  
+  # removing number 02.03.18
+  df$processed <- sapply(df$processed, function(x) removeNumbers(x))
+  
+  # Remove left-overs
+  df$processed <- sapply(df$processed, function(x) gsub("ff", " ",x))
+  df$processed <- sapply(df$processed, function(x) gsub("# ", " ", x))
+  df$processed <- sapply(df$processed, function(x) gsub(" f ", " ", x))
+  
+  # remove whitespace before & after
+  df$processed <- sapply(df$processed, function(x) gsub("^[[:space:]]+", "",x))
+  df$processed  <- sapply(df$processed, function(x) gsub("[[:space:]]+$", "",x))
+  df$processed <- sapply(df$processed, function(x) stripWhitespace(x))
+  
+  # Remove blank processed messages
+  df <- df[!(is.na(df$processed) | df$processed %in% c(""," ")), ]
+  
+  # Remove duplicates 
+  df <- df[!duplicated(df$processed),]
+  
+  # Lemmatization 26.04.18
+  df$processed <- sapply(df$processed, function(x) textstem::lemmatize_strings(x))
+  
+  return(df)
+}
+comments.raw <- split(comments.df, (seq(nrow(comments.df))-1) %/% 50000) 
+#comments.clean <- Cleandata(comments.df)
+# 
+# as.data.frame(comments.raw[['0']])
+# final.clean <- comments.df[0,]
+
+
+for (i in 1:length(comments.raw)){
+  df <- as.data.frame(comments.raw[[i]])
+  clean.df <- Cleandata.RD(df)
+  final.clean <- bind_rows(final.clean,clean.df)
+  print(paste0('Complete batch ',i,'/',length(comments.raw)))
+  write_csv(final.clean,'~/GitHub/NextBigCrypto-Senti/0. Datasets/Reddit.cleanBK.csv')
+}
+# double check the left-over
+not.done <- anti_join(comments.df,final.clean, by = 'post_id')
+clean.not.done <- Cleandata.RD(not.done)
+final.clean <- bind_rows(final.clean,clean.not.done)
+
+
 # EDA
 # link_flair_all <- dplyr::summarize(dplyr::group_by(processed.reddit,link_flair_text,link_flair_css_class),n())
 # link_flair_css <- dplyr::summarize(dplyr::group_by(processed.reddit,link_flair_css_class),n())

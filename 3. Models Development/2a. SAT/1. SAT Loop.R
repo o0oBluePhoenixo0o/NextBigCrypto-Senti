@@ -134,73 +134,20 @@ metrics <- function(cm) {
   return(final)
 }
 #######################################################
-# Load new 07.06 BTC.senti
+# Load new 07.06 df.senti
+token_name <- 'ETH' 
+compare.w.BTC <- 1 # choose whether compare price in BTC or USD ( 1 = BTC, 0 = USD)
 
-BTC.senti <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_senti_trained_0706.csv',
-                      locale = locale(encoding = 'latin1'))
-BTC.senti$status_id <- as.character(BTC.senti$status_id)
-BTC.senti$user_id <- as.character(BTC.senti$user_id)
-
-############################
-# BTC.clean <- read_csv('~/GitHub/NextBigCrypto-Senti/0. Datasets/BTC_clean_2205.csv')
-# 
-# BTC.clean$status_id <- as.character(BTC.clean$status_id)
-# BTC.clean$user_id <- as.character(BTC.clean$user_id)
-# 
-# ###################################
-# #     Load SA models (trained)    #
-# ###################################
-# 
-# # Using best model so far (GBM-tuned 080518)
-# h2o.init()
-# gbm.model.opt <- h2o.loadModel('./Models/H2O/final_grid_model_1')
-# 
-# # Implement batch-running (in process)
-# i <- 1
-# j <- 50000
-# 
-# while (i <= j) {
-#   # Preprocessing
-#   corp <- VCorpus(VectorSource(BTC.clean$processed[i:j])) # VCorpus compatible with n-gram analysis
-#   # Unigram
-#   frequencies <- DocumentTermMatrix(corp,
-#                                     control = list(weighting = function(x) weightTfIdf(x, normalize = FALSE)))
-#   # Remove these words that are not used very often. Keep terms that appear in 0.5% or more of the dataset
-#   sparse <- removeSparseTerms(frequencies, 0.995)
-#   
-#   # Generate sparse matrix
-#   ResultSparse <- as.data.frame(as.matrix(sparse))
-#   colnames(ResultSparse) <- make.names(colnames(ResultSparse))
-#   
-#   # Convert to H2O format
-#   fullH2O <- as.h2o(ResultSparse)
-#   
-#   # Prediction by batches
-#   predictionsGBM.opt <- as.data.frame(h2o.predict(gbm.model.opt,fullH2O))
-#   
-#   if (i==1){BTC.senti <- cbind(BTC.clean[i:j,], sentiment.trained = predictionsGBM.opt$predict)}
-#   if (i!=1){BTC.senti <- rbind(BTC.senti,cbind(BTC.clean[i:j,],sentiment.trained = predictionsGBM.opt$predict))}
-#   
-#   print(paste0('Complete from ',i,' to ',j,' observations!'))
-#   # increase i and j
-#   i <- i + 50000
-#   ifelse((j + 50000) <= nrow(BTC.clean),j <- j + 50000, j <- nrow(BTC.clean))
-#   
-#   gc()
-# }
-# h2o.shutdown()
-# 
-# BTC.senti <- BTC.senti %>%
-#   mutate(date = as_datetime(created_at))%>%
-#   select(date, status_id, user_id, screen_name, text, processed, 
-#          botprob, sentiment.trained)
-
+files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
+                    pattern = paste0('^',token_name,'_clean_senti_trained_'))
+df.senti <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
+                           locale = locale(encoding = 'latin1'))
+df.senti$status_id <- as.character(df.senti$status_id)
+df.senti$user_id <- as.character(df.senti$user_id)
 
 ##########################
 # load price dataset     #
 ##########################
-token_name <- 'BTC'
-
 price.df <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/1. Crawlers/Historical_Data_HR.xlsx') %>%
   filter(symbol == token_name) %>%
   dplyr::select(-date.time)
@@ -217,7 +164,7 @@ final.result <- data.frame('Type_hr' = character(),
                            'Algo' = character())
 time.set <- c(6,12,24)
 
-
+gc()
 ###############
 #
 # MAIN LOOP 
@@ -231,7 +178,7 @@ for (y in 1:length(time.set)){
   
   # Summarize base on sentiment each day
   # Filter Senti Trained base on time.slot
-  BTC.senti.trained <- BTC.senti %>% 
+  df.senti.trained <- df.senti %>% 
     dplyr::select(date,sentiment.trained) %>%
     group_by(time = floor_date(date, paste0(time.slot,' hour')),
              sentiment.trained) %>%
@@ -242,9 +189,9 @@ for (y in 1:length(time.set)){
     mutate(per = round(100* count/countT,2))
   
   # Convert to each sentiment = column
-  BTC.senti.trained <- reshape2::dcast(BTC.senti.trained, time + countT ~ sentiment.trained,
+  df.senti.trained <- reshape2::dcast(df.senti.trained, time + countT ~ sentiment.trained,
                                        value.var = 'per')
-  colnames(BTC.senti.trained) <- c('time','count','neg','neu','pos')
+  colnames(df.senti.trained) <- c('time','count','neg','neu','pos')
   
   #########################################
   # Price.df
@@ -262,15 +209,20 @@ for (y in 1:length(time.set)){
   
   price.df <- price.df %>% 
     filter(mark == 1) %>%
-    dplyr::select(time,close,priceBTC)
+    dplyr::select(time,close,priceBTC,-mark)
   
   # calculate differences between close prices of each transaction dates
   price.df$pricediff <- 0
-  
-  for (i in 2:nrow(price.df)){
-    price.df$pricediff[i] <- price.df$close[i] - price.df$close[i-1]
+  if (token_name == 'BTC' | compare.w.BTC == 0){
+    for (i in 2:nrow(price.df)){
+      price.df$pricediff[i] <- price.df$close[i] - price.df$close[i-1]
+    }
   }
-  
+  if (token_name != 'BTC' & compare.w.BTC == 1){
+    for (i in 2:nrow(price.df)){
+      price.df$pricediff[i] <- price.df$priceBTC[i] - price.df$priceBTC[i-1]
+    }
+  }  
   ###########
   # BINNING #
   ###########
@@ -279,10 +231,16 @@ for (y in 1:length(time.set)){
   price.df$bin <- NA
   
   # Assigning bin to main dataframe
-  for (i in 2:nrow(price.df)){
-    price.df$diff[i] <- round(((price.df$close[i]-price.df$close[i-1])/price.df$close[i])*100,2)
+  if (token_name == 'BTC' | compare.w.BTC == 0){
+    for (i in 2:nrow(price.df)){
+      price.df$diff[i] <- round(((price.df$close[i]-price.df$close[i-1])/price.df$close[i])*100,2)
+    }
   }
-  
+  if (token_name != 'BTC' & compare.w.BTC == 1){
+    for (i in 2:nrow(price.df)){
+      price.df$diff[i] <- round(((price.df$priceBTC[i]-price.df$priceBTC[i-1])/price.df$priceBTC[i])*100,2)
+    }
+  }
   # This version only split 2 classes
   for (i in 2:nrow(price.df)){
     price.df$bin[i] <- ifelse(price.df$diff[i] < 0,'down','up')
@@ -291,17 +249,6 @@ for (y in 1:length(time.set)){
   for (z in 1:14){
     
     x <- z/(time.slot/24)
-    
-    ## SAT Model only no need for price t-1 => t-14
-    # for (i in 1:x){
-    #   eval(parse(text = paste0('price.df$t_', i,' <- NA')))
-    # }
-    # 
-    # for (i in 1:nrow(price.df)){
-    #   for (j in 1:x){
-    #     eval(parse(text = paste0('price.df$t_', j,' <- as.factor(lag(price.df$bin,',j,'))')))
-    #   }
-    # }
     
     # Convert to categorical variables
     price.df$bin <- as.factor(price.df$bin)
@@ -314,23 +261,23 @@ for (y in 1:length(time.set)){
       # Create 14x4 sentiment features
       # Generate columns through loop
       for (i in 1:x){
-        eval(parse(text = paste0('BTC.senti.trained$',name[k],'_', i,' <- NA')))
+        eval(parse(text = paste0('df.senti.trained$',name[k],'_', i,' <- NA')))
       }
       
-      for (i in 1:nrow(BTC.senti.trained)){
+      for (i in 1:nrow(df.senti.trained)){
         for (j in 1:x){
-          eval(parse(text = paste0('BTC.senti.trained$',name[k],'_', j,' <- lag(BTC.senti.trained$',name[k],',',j,')')))
+          eval(parse(text = paste0('df.senti.trained$',name[k],'_', j,' <- lag(df.senti.trained$',name[k],',',j,')')))
         }
       }
     }
     
     # Fill NA value from sentiment with 0 as 0%
     ## tidyr
-    BTC.senti.trained <- BTC.senti.trained %>%
+    df.senti.trained <- df.senti.trained %>%
       replace(is.na(.), 0)
     
     # Build a training and testing set
-    main.df <- inner_join(price.df, BTC.senti.trained, by = 'time')
+    main.df <- inner_join(price.df, df.senti.trained, by = 'time')
     main.df <- unique(main.df)
     # Build a training and testing set.
     main.df <- main.df %>%
@@ -484,8 +431,5 @@ for (y in 1:length(time.set)){
 }
 
 # Save final result
-write.xlsx(final.result,'~/GitHub/NextBigCrypto-Senti/3. Models Development/0. SAT_result.xlsx')
+write.xlsx(final.result,paste0('~/GitHub/NextBigCrypto-Senti/3. Models Development/Results/0.',token_name,'_SAT_result.xlsx'))
 
-# Save model
-save.image('~/GitHub/NextBigCrypto-Senti/Models/SAT_LOOP_0706.RData')
-#load('~/GitHub/NextBigCrypto-Senti/Models/SAT_LOOP_2705.RData')
