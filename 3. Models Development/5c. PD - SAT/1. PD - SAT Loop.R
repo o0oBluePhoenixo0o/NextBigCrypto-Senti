@@ -1,4 +1,7 @@
-# PD only model
+# 11.06.2018
+# PD-SAT
+# Loop for generating results day t-1 ==> t-14 (comparing 6h/12h/24h on Accuracy & F1-score)
+
 # clear the environment
 rm(list= ls())
 gc()
@@ -15,13 +18,9 @@ packages <- c("readr", #read data
               "ggplot2", # plotting package
               "quanteda", #kwic function search phrases
               "stringi", #string manipulation
-              "tm", # text mining package
-              "textmineR",
-              "tidytext",
-              "topicmodels",
-              "ggplot2", # plotting package
-              "lda","LDAvis","servr",
-              "tidyquant", "openxlsx","anytime","tidyr",
+              "tidyquant", "openxlsx","anytime",
+              "tidytext","topicmodels",
+              "tm", #text mining package
               "caTools","caret", "rpart", "h2o","e1071","RWeka","randomForest") # machine learning packages
 
 if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
@@ -134,22 +133,49 @@ metrics <- function(cm) {
                                micro_prf,mcc))
   return(final)
 }
-###########################
-# Load LDA result directly
-#
 
+######################
+# PD Model
+######################
+
+# Load PD result directly
+#
 token_name <- 'BTC'
 
 files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
                     pattern = paste0('^',token_name,'_clean_PD_'))
 df.PD <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
-                   locale = locale(encoding = 'latin1')) %>% select(-topic)
+                   locale = locale(encoding = 'latin1'))
 df.PD$status_id <- as.character(df.PD$status_id)
 df.PD$user_id <- as.character(df.PD$user_id)
+# Make a list of drop.cols for loop later
+mintopic <- min(df.PD$topic)
+maxtopic <- max(df.PD$topic)
 
-###############################
-#     Load price dataset      #
-###############################
+drop.cols <- c('countT')
+for (i in mintopic:maxtopic){
+  eval(drop.cols <- c(drop.cols,paste0('topic_',i)))
+}
+
+# put "topic" in front of number
+df.PD$topic <- paste0('topic_',df.PD$topic)
+
+# ###################################
+# #     Load SA models (trained)    #
+# ###################################
+
+### 07.06 Pre-trained
+
+files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
+                    pattern = paste0('^',token_name,'_clean_senti_trained_'))
+df.senti <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
+                     locale = locale(encoding = 'latin1'))
+df.senti$status_id <- as.character(df.senti$status_id)
+df.senti$user_id <- as.character(df.senti$user_id)
+
+##########################
+# load Price dataset     #
+##########################
 
 price.df <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/1. Crawlers/Historical_Data_HR.xlsx') %>%
   filter(symbol == token_name) %>%
@@ -168,11 +194,6 @@ final.result <- data.frame('Type_hr' = character(),
                            'Algo' = character())
 time.set <- c(6,12,24)
 
-# Make a list of drop.cols for loop later
-drop.cols <- c('countT')
-for (i in 1:10){
-  eval(drop.cols <- c(drop.cols,paste0('topic_',i)))
-}
 
 ###############
 #
@@ -185,36 +206,44 @@ for (y in 1:length(time.set)){
   time.slot <- time.set[y] # insert trigger
   price.df <- bk           # get backup for price.df
   
-  # get total count per time slot
-  df.PD.df <- df.PD %>%
+  ## PD + SENTI
+  # Get total + percentage of each class / day
+  df.senti.trained <- df.senti %>% 
+    dplyr::select(date,sentiment.trained) %>%
+    group_by(time = floor_date(date, paste0(time.slot,' hour')),
+             sentiment.trained) %>%
+    summarize(count = n()) %>% 
+    group_by(time) %>% 
+    mutate(countT = sum(count)) %>%
+    group_by(sentiment.trained) %>%
+    mutate(per = round(100* count/countT,2))
+  
+  # Per / topic
+  df.PD.df <- df.PD %>% 
     dplyr::rename(date = created_at) %>%
-    dplyr::select(date,c(topic1:topic10)) %>%
-    group_by(time = floor_date(date, paste0(time.slot,' hour'))) %>%
-    summarize(countT = n()) %>%
-    group_by(time) 
-  # Get counts of topics in allocated timeslot
-  # Loop for 10 topics
-  for (i in 1:10){
-    eval(parse(text = paste0('df.topic <- df.PD %>% ',
-                             'dplyr::rename(date = created_at, topic_',i,' = topic',i,') %>% ',
-                             'filter(topic_',i,' == 1) %>% ',
-                             'dplyr::select(date, topic_',i,') %>% ',
-                             'group_by(time = floor_date(date, paste0(time.slot,',"'",' hour',"'",')), topic_',i,') %>% ',
-                             'summarize(count = n()) %>% ',
-                             'mutate(topic_',i,' = count) %>% ',
-                             'select(-count)')))
-    # merge with full PD df
-    df.PD.df <- left_join(df.PD.df, df.topic, by = "time")
-    df.PD.df[is.na(df.PD.df)] <- 0
-    # Get percentages of topics
-    eval(parse(text = paste0('df.PD.df <- df.PD.df %>% ',
-                             'mutate(topic_',i,' = round((topic_',i,'/countT) *100,2))')))
-    
-  }
+    dplyr::select(date, topic) %>%
+    group_by(time = floor_date(date, paste0(time.slot,' hour')),
+             topic) %>%
+    summarize(count = n()) %>%
+    group_by(time) %>%
+    mutate(countT = sum(count)) %>%
+    group_by(topic) %>%
+    mutate(per.tp = round(100* count/countT,2))
+  
+  # Convert to each sentiment = column
+  df.PD.df <- reshape2::dcast(df.PD.df, time + countT ~ topic,
+                               value.var = 'per.tp')
+  
+  df.senti.trained <- reshape2::dcast(df.senti.trained, time + countT ~ sentiment.trained,
+                                      value.var = 'per')
+  colnames(df.senti.trained) <- c('time','count','neg','neu','pos')
+  
+  # Merge senti + PD
+  df.senti.PD.df <- inner_join(df.senti.trained, df.PD.df, by = 'time')
+  
   # Keep colnames for later loop
-  name <- colnames(df.PD.df)
+  name <- colnames(df.senti.PD.df)
   name <- name[-1] # except date-time column
- 
   #########################################
   # Price.df
   
@@ -278,29 +307,36 @@ for (y in 1:length(time.set)){
     price.df$bin <- as.factor(price.df$bin)
     
     #############################################################
-    # LDA dataset
+    # Loop to create columns
+    
     for (k in 1:length(name)){
-      # Create 14x4 features
+      # Create 14 days features
       # Generate columns through loop
       for (i in 1:x){
-        eval(parse(text = paste0('df.PD.df$',name[k],'_', i,' <- NA')))
+        eval(parse(text = paste0('df.senti.PD.df$',name[k],'_', i,' <- NA')))
       }
       
-      for (i in 1:nrow(df.PD.df)){
+      for (i in 1:nrow(df.senti.PD.df)){
         for (j in 1:x){
-          eval(parse(text = paste0('df.PD.df$',name[k],'_', j,' <- lag(df.PD.df$',name[k],',',j,')')))
+          eval(parse(text = paste0('df.senti.PD.df$',name[k],'_', j,' <- lag(df.senti.PD.df$',name[k],',',j,')')))
         }
       }
     }
     
+    # Fill NA value from sentiment with 0 as 0%
+    ## tidyr
+    df.senti.PD.df <- df.senti.PD.df %>%
+      replace(is.na(.), 0)
+    
     # Build a training and testing set
-    main.df <- inner_join(price.df, df.PD.df, by = 'time')
+    main.df <- inner_join(price.df, df.senti.PD.df, by = 'time')
     main.df <- unique(main.df)
     # Build a training and testing set.
     main.df <- main.df %>%
       dplyr::select(-time,-close,-diff,-pricediff,
-                    -priceBTC) %>%
+                    -count,-neg,-neu,-pos,-priceBTC) %>%
       dplyr::select(-one_of(drop.cols))
+    
     
     # Remove NA 
     main.df <- main.df[complete.cases(main.df),]
@@ -449,5 +485,5 @@ for (y in 1:length(time.set)){
 }
 
 # Save final result
-write.xlsx(final.result,paste0('~/GitHub/NextBigCrypto-Senti/3. Models Development/0.',token_name,'_wUSD_PD_result.xlsx'))
+write.xlsx(final.result,paste0('~/GitHub/NextBigCrypto-Senti/3. Models Development/0.',token_name,'_wUSD_PD-SAT_result.xlsx'))
 

@@ -30,55 +30,89 @@ if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
 lapply(packages, require, character.only = TRUE)
 
 ##############
+# PD Model   #
+##############
+if (model.list$PD[model.no] == 1){
+  
+  # Check if already loaded
+  if (exists("df.PD") == FALSE){
+    # Load PD result directly
+    files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
+                        pattern = paste0('^',token_name,'_clean_PD_'))
+    df.PD <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
+                       locale = locale(encoding = 'latin1'))
+    df.PD$status_id <- as.character(df.PD$status_id)
+    df.PD$user_id <- as.character(df.PD$user_id)
+  }
+  
+  drop.cols <- c('countT')
+  for (i in 1:10){
+    eval(drop.cols <- c(drop.cols,paste0('topic_',i)))
+  }
+}
+##############
 # LDA Model  #
 ##############
-if (LDA == 1){
-  # Load LDA result directly
-  files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
-                      pattern = paste0('^',token_name,'_clean_LDA_'))
-  df.LDA <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
-                     locale = locale(encoding = 'latin1'))
-  df.LDA$status_id <- as.character(df.LDA$status_id)
-  df.LDA$user_id <- as.character(df.LDA$user_id)
-  # Make a list of drop.cols for loop later
-  mintopic <- min(df.LDA$topic)
-  maxtopic <- max(df.LDA$topic)
+if (model.list$LDA[model.no] == 1){
   
+  # Check if already loaded
+  if (exists("df.LDA") == FALSE){
+    # Load LDA result directly
+    files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
+                        pattern = paste0('^',token_name,'_clean_LDA_'))
+    df.LDA <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
+                       locale = locale(encoding = 'latin1'))
+    df.LDA$status_id <- as.character(df.LDA$status_id)
+    df.LDA$user_id <- as.character(df.LDA$user_id)
+    # put "topic" in front of number
+    df.LDA$topic <- paste0('topic_',df.LDA$topic)
+    # Make a list of drop.cols for loop later
+    mintopic <- min(df.LDA$topic)
+    maxtopic <- max(df.LDA$topic)
+  }
+  
+  if (exists('df.LDA')==TRUE){
+    # Make a list of drop.cols for loop later
+    mintopic <- min(as.numeric(substr(df.LDA$topic,7,nchar(df.LDA$topic))))
+    maxtopic <- max(as.numeric(substr(df.LDA$topic,7,nchar(df.LDA$topic))))
+  }
+
   drop.cols <- c('countT')
   for (i in mintopic:maxtopic){
     eval(drop.cols <- c(drop.cols,paste0('topic_',i)))
   }
-  
-  # put "topic" in front of number
-  df.LDA$topic <- paste0('topic_',df.LDA$topic)
 }
-####################################
-#     Load SA models (packages)    #
-####################################
+###########################
+# SA models (packages)    #
+###########################
 
-if (SAP == 1){
-  # Load new df.senti
-  files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
-                      pattern = paste0('^',token_name,'_clean_senti_pkg_'))
-  df.senti <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
-                       locale = locale(encoding = 'latin1')) %>%
-    rename(sentiment = sentiment.packages)
-  df.senti$status_id <- as.character(df.senti$status_id)
-  df.senti$user_id <- as.character(df.senti$user_id)
+if (model.list$SAP[model.no] == 1){
+  if (exists("df.senti") == FALSE){
+    # Load new df.senti
+    files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
+                        pattern = paste0('^',token_name,'_clean_senti_pkg_'))
+    df.senti <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
+                         locale = locale(encoding = 'latin1')) %>%
+      rename(sentiment = sentiment.packages)
+    df.senti$status_id <- as.character(df.senti$status_id)
+    df.senti$user_id <- as.character(df.senti$user_id)
+  }
 }
 
-###################################
-#     Load SA models (trained)    #
-###################################
-if (SAT == 1){
-  # Load new df.senti
-  files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
-                      pattern = paste0('^',token_name,'_clean_senti_trained_'))
-  df.senti <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
-                       locale = locale(encoding = 'latin1')) %>%
-    rename(sentiment = sentiment.trained)
-  df.senti$status_id <- as.character(df.senti$status_id)
-  df.senti$user_id <- as.character(df.senti$user_id)
+##########################
+# SA models (trained)    #
+##########################
+if (model.list$SAT[model.no] == 1){
+  if (exists('df.senti')==FALSE){
+    # Load new df.senti
+    files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
+                        pattern = paste0('^',token_name,'_clean_senti_trained_'))
+    df.senti <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
+                         locale = locale(encoding = 'latin1')) %>%
+      rename(sentiment = sentiment.trained)
+    df.senti$status_id <- as.character(df.senti$status_id)
+    df.senti$user_id <- as.character(df.senti$user_id)
+  }
 }
 
 ##########################
@@ -213,7 +247,7 @@ metrics <- function(cm) {
 #
 ###############
 print('**************************************************************************************')
-print(paste0('Generating models for settings ',result_filename))
+print(paste0('* Generating models for settings ',result_filename))
 print('**************************************************************************************')
 
 for (y in 1:length(time.set)){
@@ -222,7 +256,7 @@ for (y in 1:length(time.set)){
   price.df <- bk           # get backup for price.df
   
   # SAT and SAP 
-  if (SAT == 1 | SAP == 1){
+  if (model.list$SAT[model.no] == 1 | model.list$SAP[model.no] == 1){
     
     # Increase list of drop columns (for later use)
     if (exists("drop.cols") == TRUE){drop.cols <- c(drop.cols,'count','neu','pos','neg')}
@@ -239,16 +273,17 @@ for (y in 1:length(time.set)){
       group_by(sentiment) %>%
       mutate(per = round(100* count/countT,2))
     
-    # with out topic modeling
-    if (LDA == 0 & PD == 0){
+    # with out topic modeling (no PD or LDA)
+    if (model.list$LDA[model.no] == 0 & model.list$PD[model.no] == 0){
       # Convert to each sentiment = column
-      df.final <- dcast(df.senti.final, time + countT ~ sentiment , 
+      df.final <- reshape2::dcast(df.senti.final, time + countT ~ sentiment , 
                               value.var = 'per')
       colnames(df.final) <- c('time','count','neg','neu','pos')
     }
     
+    #########################################
     # LDA model + SAP/SAT
-    if (LDA == 1){
+    if (model.list$LDA[model.no] == 1){
       # Per / topic
       df.LDA.df <- df.LDA %>% 
         dplyr::rename(date = created_at) %>%
@@ -272,10 +307,49 @@ for (y in 1:length(time.set)){
       # Merge senti + LDA
       df.final <- inner_join(df.senti.final, df.LDA.df, by = 'time')
     }
+    #########################################
+    # PD model + SAP/SAT
+    if (model.list$PD[model.no] == 1){
+      # Filter Topic base on time.slot
+      # get total count per time slot
+      df.PD.df <- df.PD %>%
+        dplyr::rename(date = created_at) %>%
+        dplyr::select(date,c(topic1:topic10)) %>%
+        group_by(time = floor_date(date, paste0(time.slot,' hour'))) %>%
+        summarize(countT = n()) %>%
+        group_by(time) 
+      # Get counts of topics in allocated timeslot
+      # Loop for 10 topics
+      for (i in 1:10){
+        eval(parse(text = paste0('df.topic <- df.PD %>% ',
+                                 'dplyr::rename(date = created_at, topic_',i,' = topic',i,') %>% ',
+                                 'filter(topic_',i,' == 1) %>% ',
+                                 'dplyr::select(date, topic_',i,') %>% ',
+                                 'group_by(time = floor_date(date, paste0(time.slot,',"'",' hour',"'",')), topic_',i,') %>% ',
+                                 'summarize(count = n()) %>% ',
+                                 'mutate(topic_',i,' = count) %>% ',
+                                 'select(-count)')))
+        # merge with full PD df
+        df.PD.df <- left_join(df.PD.df, df.topic, by = "time")
+        df.PD.df[is.na(df.PD.df)] <- 0
+        # Get percentages of topics
+        eval(parse(text = paste0('df.PD.df <- df.PD.df %>% ',
+                                 'mutate(topic_',i,' = round((topic_',i,'/countT) *100,2))')))
+        
+      }
+      df.senti.final <- reshape2::dcast(df.senti.final, time + countT ~ sentiment,
+                                        value.var = 'per')
+      colnames(df.senti.final) <- c('time','count','neg','neu','pos')
+      
+      # Merge senti + LDA
+      df.final <- inner_join(df.senti.final, df.PD.df, by = 'time')
+    }
   }
-
+  
+  #######################
   # Exception = only LDA
-  if (LDA == 1 & SAT == 0 & SAP == 0){
+  #######################
+  if (model.list$LDA[model.no] == 1 & model.list$SAT[model.no] == 0 & model.list$SAP[model.no] == 0){
     # Summarize base on topics allocation each day
     # Filter Topic base on time.slot
     df.LDA.df <- df.LDA %>%
@@ -293,11 +367,52 @@ for (y in 1:length(time.set)){
     df.final <- reshape2::dcast(df.LDA.df, time + countT ~ topic,
                                  value.var = 'per')
   }
-  # Keep colnames for later loop
-  name <- colnames(df.final)
-  name <- name[-1] # except date-time column
   
+  #######################
+  # Exception = only PD
+  #######################
+  if (model.list$PD[model.no] == 1 & model.list$SAT[model.no] == 0 & model.list$SAP[model.no] == 0){
+    # Filter Topic base on time.slot
+    # get total count per time slot
+    df.PD.df <- df.PD %>%
+      dplyr::rename(date = created_at) %>%
+      dplyr::select(date,c(topic1:topic10)) %>%
+      group_by(time = floor_date(date, paste0(time.slot,' hour'))) %>%
+      summarize(countT = n()) %>%
+      group_by(time) 
+    # Get counts of topics in allocated timeslot
+    # Loop for 10 topics
+    for (i in 1:10){
+      eval(parse(text = paste0('df.topic <- df.PD %>% ',
+                               'dplyr::rename(date = created_at, topic_',i,' = topic',i,') %>% ',
+                               'filter(topic_',i,' == 1) %>% ',
+                               'dplyr::select(date, topic_',i,') %>% ',
+                               'group_by(time = floor_date(date, paste0(time.slot,',"'",' hour',"'",')), topic_',i,') %>% ',
+                               'summarize(count = n()) %>% ',
+                               'mutate(topic_',i,' = count) %>% ',
+                               'select(-count)')))
+      # merge with full PD df
+      df.PD.df <- left_join(df.PD.df, df.topic, by = "time")
+      df.PD.df[is.na(df.PD.df)] <- 0
+      # Get percentages of topics
+      eval(parse(text = paste0('df.final <- df.PD.df %>% ',
+                               'mutate(topic_',i,' = round((topic_',i,'/countT) *100,2))')))
+      
+    }
+  }
   
+  # check if it is only HP model
+  onlyHP <- 0
+  if (model.list$HP[model.no] == 1 & model.list$SAT[model.no] == 0 & model.list$SAP[model.no] == 0 & 
+      model.list$LDA[model.no] == 0 & model.list$PD[model.no] == 0){
+    onlyHP <- 1
+  }
+  if (onlyHP == 0){ # not only-HP model
+    # Keep colnames for later loop
+    name <- colnames(df.final)
+    name <- name[-1] # except date-time column
+  }
+
   #########################################
   # Price.df
   # filter out 24-hr mark
@@ -357,7 +472,7 @@ for (y in 1:length(time.set)){
     x <- z/(time.slot/24)
     
     # Historical Price is included or not
-    if (HP == 1){
+    if (model.list$HP[model.no] == 1){
       for (i in 1:x){
         eval(parse(text = paste0('price.df$t_', i,' <- NA')))
       }
@@ -371,34 +486,29 @@ for (y in 1:length(time.set)){
 
     # Convert to categorical variables
     price.df$bin <- as.factor(price.df$bin)
-    
-    #############################################################
-    # Loop to create columns
-    
-    for (k in 1:length(name)){
-      # Create 14 days features
-      # Generate columns through loop
-      for (i in 1:x){
-        eval(parse(text = paste0('df.final$',name[k],'_', i,' <- NA')))
-      }
-      
-      for (i in 1:nrow(df.final)){
-        for (j in 1:x){
-          eval(parse(text = paste0('df.final$',name[k],'_', j,' <- lag(df.final$',name[k],',',j,')')))
-        }
-      }
-    }
-    
-    # check if it is only HP model
-    onlyHP <- 0
-    if (HP == 1 & SAT == 0 & SAP == 0 & LDA == 0 & PD == 0){
-      onlyHP <- 1
+    # if it is only HP model
+    if (onlyHP == 1){
       main.df <- price.df %>% 
         dplyr::select(-time,-close,-priceBTC,-pricediff,-diff)
     }
     
     # if it is not HP model then proceed
     if (onlyHP == 0){
+      #############################################################
+      # Loop to create columns
+      for (k in 1:length(name)){
+        # Create 14 days features
+        # Generate columns through loop
+        for (i in 1:x){
+          eval(parse(text = paste0('df.final$',name[k],'_', i,' <- NA')))
+        }
+        
+        for (i in 1:nrow(df.final)){
+          for (j in 1:x){
+            eval(parse(text = paste0('df.final$',name[k],'_', j,' <- lag(df.final$',name[k],',',j,')')))
+          }
+        }
+      }
       # Fill NA value from sentiment / topics with 0 as 0%
       ## tidyr
       df.final <- df.final %>%
@@ -558,31 +668,13 @@ for (y in 1:length(time.set)){
     
     final.result <- rbind(final.result,result)
     
-    print(paste0('Complete ',time.set[y],'-hr on day t-',z,'. Best model: ',model,' with ',round(acc*100,2),' acc and ',round(f1,2),' F1-score.'))
+    print(paste0('Complete ',time.set[y],'-hr on day t-',z,'. Best model: ',model,' with ',round(acc*100,2),'% acc and ',round(f1,2),' F1-score.'))
     gc() # garbage collection
   }
 }
 
-# title.final <- ''
-# if (HP == 1){title.final <- paste0(title.final,'_HP')}
-# if (SAT == 1){title.final <- paste0(title.final,'_SAT')}
-# if (SAP == 1){title.final <- paste0(title.final,'_SAP')}
-# if (LDA == 1){title.final <- paste0(title.final,'_LDA')}
-# if (PD == 1){title.final <- paste0(title.final,'_PD')}
-# 
-# # compare price in BTC / USD
-# if (compare.w.BTC == 1){compare.w.BTC <- '_wBTC'}
-# if (compare.w.BTC == 0){compare.w.BTC <- '_wUSD'}
-# 
-# # Read in coin list as Oct 17
-# coins_list <- read.csv("~/GitHub/NextBigCrypto-Senti/1. Crawlers/Top50_Oct7.csv")
-# position <- match(token_name, coins_list$symbol) # get position in queue
-# 
-# result_filename <- paste0(position,'.',token_name, compare.w.BTC, title.final)
-
 # Save final result
 write.xlsx(final.result,paste0('~/GitHub/NextBigCrypto-Senti/3. Models Development/Results/',
-                               position,'.',token_name, compare.w.BTC,
-                               title.final,'.xlsx'))
+                               result_filename,'.xlsx'))
 # Print out message
 print(paste0('Completed ',result_filename,' result!'))

@@ -178,8 +178,9 @@ bk <- df
 # Regulations
 topic1.regulation <- c("regulate", #regul stem
                       "regulation", # no stem avail
-                      "SEC", "bank", "collaps", "tax", "rule", "govern",
-                      "law", "crackdown")
+                      "SEC", "bank", "collaps", "tax", "govern",
+                      "law", "crackdown","court")
+
 # technical analysis
 topic2.TA <- c("TA", "chart", "RSI", "MACD",
                "support", "line", "signal",
@@ -226,7 +227,7 @@ topic10.mining <- c("POW","mining","block reward","ASIC","GPU Mining","NVIDIA",
 addtopic <- function(maindf, topicdf, topicid){
   
   #kwic detect match
-  topic.result <- kwic(maindf$stem, stemDocument(topicdf))
+  topic.result <- kwic(maindf$stem, stemDocument(tolower(topicdf)))
   topic.result <- as.data.frame(topic.result)
   topic.result$docid <- substr(topic.result$docname,5,stri_length(topic.result$docname))
   
@@ -242,7 +243,8 @@ addtopic <- function(maindf, topicdf, topicid){
 }
 
 # Create stem document column for main dataset
-df$stem <- sapply(df$processed, function(x) stemDocument(x))
+df$stem <- stemDocument(tolower(x))
+
 
 df$topic1 <- 0
 df$topic2 <- 0
@@ -276,7 +278,7 @@ maindf <- df[,which(colnames(df) %in% c('created_at','status_id','processed',
 # Change statusid type
 maindf$status_id <- as.character(maindf$status_id)
 
-###############################
+######################################################################################################
 # Word cloud for each topic
 setwd("~/GitHub/NextBigCrypto-Senti/x. Documents/images")
 

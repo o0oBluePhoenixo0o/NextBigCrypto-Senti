@@ -7,6 +7,7 @@
 # 30.04.18 - Abbreviation conversion for Unigram + Lemmatization + Stopwords v1
 # 08.05.18 - Revisit tf-idf + fix abbreviation conversion + completed enhanced GBM (tuned)
 # 15.05.18 - Add POS tagging before Lemma
+# 24.06.18 - Add Loughran - McDonald lexicon (for financial)
 
 # clear the environment
 rm(list= ls())
@@ -397,6 +398,9 @@ neg.words = c(neg.words, 'Fight', 'fighting', 'wtf', 'arrest', 'no', 'not',
 # load preprocessing function
 source('~/GitHub/NextBigCrypto-Senti/2. Preprocessing/1. Preprocessing_TW.R')
 
+#pos.words <- unique(textstem::stem_words(pos.words))
+#neg.words <- unique(textstem::stem_words(neg.words))
+
 #evaluation function
 score.sentiment <- function(sentences, pos.words, neg.words, .progress='none')
 {
@@ -447,7 +451,28 @@ result <- mutate(result, status_id, sentiment = ifelse(result$score > 0, 1,
                                                        ifelse(result$score < 0, -1, 0)))
 
 cmBL <- table(manual.df$sentiment,result$sentiment)
-metrics(cmBL) # acc 58%
+metrics(cmBL) # acc 59%
+
+######################################
+# Loughran McDonald lexicon
+FIN_n <- read.csv("http://www3.nd.edu/~mcdonald/Data/Finance_Word_Lists/LoughranMcDonald_Negative.csv", stringsAsFactors = FALSE)[,1] # read negative word list
+FIN_p <- read.csv("http://www3.nd.edu/~mcdonald/Data/Finance_Word_Lists/LoughranMcDonald_Positive.csv", stringsAsFactors = FALSE)[,1] # read positive word list
+
+FIN_p <- unique(tolower(FIN_p))
+FIN_n <- unique(tolower(FIN_n))
+
+scores <- score.sentiment(manual.df$text, FIN_p, FIN_n, .progress='text')
+
+result <- scores
+
+#Add ID to result set
+result$status_id <- manual.df$status_id
+#add new scores as a column
+result <- mutate(result, status_id, sentiment = ifelse(result$score > 0, 1, 
+                                                       ifelse(result$score < 0, -1, 0)))
+
+cmLM <- table(manual.df$sentiment,result$sentiment)
+metrics(cmLM) # acc 56%
 
 ######################################
 # Syuzhet package

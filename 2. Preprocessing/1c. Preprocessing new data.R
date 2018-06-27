@@ -31,7 +31,7 @@ setwd("~/GitHub/NextBigCrypto-Senti")
 
 #######################################################
 # Load dataset base on token
-symbol <- 'BTC'
+symbol <- 'ETH'
 
 # Read in coin list as Oct 17
 coins_list <- read.csv("~/GitHub/NextBigCrypto-Senti/1. Crawlers/Top50_Oct7.csv")
@@ -308,7 +308,7 @@ topic <- NA
 df.PD <- cbind(df.clean,topic)
 
 # only need stemmed version of text
-df.PD$stem <- stemDocument(df.PD$text)
+df.PD$stem <- stemDocument(tolower(df.PD$text))
 ####
 # Topic creation
 ####
@@ -365,7 +365,7 @@ topic10.mining <- c("POW","mining","block reward","ASIC","GPU Mining","NVIDIA",
 addtopic <- function(df, topicdf, topicid){
   
   #kwic detect match
-  topic.result <- quanteda::kwic(df$processed, stemDocument(topicdf))
+  topic.result <- quanteda::kwic(df$processed, stemDocument(tolower(topicdf)))
   topic.result <- as.data.frame(topic.result)
   topic.result$docid <- substr(topic.result$docname,5,stri_length(topic.result$docname))
   

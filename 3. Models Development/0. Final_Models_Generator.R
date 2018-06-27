@@ -9,9 +9,9 @@ gc()
 #################
 # Edit variables here for the model you want to generate
 # crypto token to be built models on
-token_name <- 'ETH'
+token_name <- 'BTC'
 # compare price with USD$ or BTC (Bitcoin) (0 = USD / 1 = BTC)
-compare.w.BTC <- 1
+compare.w.BTC <- 0
 
 # Legend
 # - Historical Price (HP)
@@ -20,84 +20,112 @@ compare.w.BTC <- 1
 # - Pre-defined topics (PD) 
 
 # Change the flag here (1 = true / 0 = false)
-# 1.  HP             
-# 2.  SAT            
-# 3.  SAP            
-# 4.  SAT - HP       
-# 5.  SAP - HP       
-# 6.  LDA            
-# 7.  LDA - HP       
-# 8.  LDA - SAT      
-# 9.  LDA - SAT - HP 
-# 10. LDA - SAP      
-# 11. LDA - SAP - HP 
-# 12. PD             
-# 13. PD - HP        
-# 14. PD - SAT       
-# 15. PD - SAT - HP  
-# 16. PD - SAP       
-# 17. PD - SAP - HP  
-
 # Example, model 4 would be SAT = 1 and HP = 1 while the rest are 0
-HP <- 0
-SAT <- 0
-SAP <- 0
-LDA <- 0
-PD <- 0
+model.list <- data.frame(HP = numeric(), 
+                         SAT = numeric(), 
+                         SAP = numeric(), 
+                         LDA = numeric(), 
+                         PD = numeric())
 
+# 1.  HP
+model.list[1,] <- c(1,0,0,0,0) 
+# 2.  SAT            
+model.list[2,] <- c(0,1,0,0,0) 
+# 3.  SAP            
+model.list[3,] <- c(0,0,1,0,0)
+# 4.  SAT - HP
+model.list[4,] <- c(1,1,0,0,0)
+# 5.  SAP - HP
+model.list[5,] <- c(1,0,1,0,0)
+# 6.  LDA            
+model.list[6,] <- c(0,0,0,1,0)
+# 7.  LDA - HP
+model.list[7,] <- c(1,0,0,1,0)
+# 8.  LDA - SAT
+model.list[8,] <- c(0,1,0,1,0)      
+# 9.  LDA - SAT - HP
+model.list[9,] <- c(1,1,0,1,0)
+# 10. LDA - SAP
+model.list[10,] <- c(0,0,1,1,0)
+# 11. LDA - SAP - HP 
+model.list[11,] <- c(1,0,1,1,0)
+# 12. PD             
+model.list[12,] <- c(0,0,0,0,1)
+# 13. PD - HP
+model.list[13,] <- c(1,0,0,0,1)
+# 14. PD - SAT
+model.list[14,] <- c(0,1,0,0,1)
+# 15. PD - SAT - HP
+model.list[15,] <- c(1,1,0,0,1)
+# 16. PD - SAP
+model.list[16,] <- c(0,0,1,0,1)
+# 17. PD - SAP - HP
+model.list[17,] <- c(1,0,1,0,1)
+
+ID <- seq.int(nrow(model.list))
+model.list <- cbind(ID,model.list)
 
 # Function to get model name (for later use - combine all results together)
-get.model.name <- function(HP,SAT,SAP,LDA,PD,compare.w.BTC){
+get.model.name <- function(model.list,model.no,compare.w.BTC,position){
   title.final <- ''
-  if (HP == 1){title.final <- paste0(title.final,'_HP')}
-  if (SAT == 1){title.final <- paste0(title.final,'_SAT')}
-  if (SAP == 1){title.final <- paste0(title.final,'_SAP')}
-  if (LDA == 1){title.final <- paste0(title.final,'_LDA')}
-  if (PD == 1){title.final <- paste0(title.final,'_PD')}
+  if (model.list$HP == 1){title.final <- paste0(title.final,'_HP')}
+  if (model.list$SAT == 1){title.final <- paste0(title.final,'_SAT')}
+  if (model.list$SAP == 1){title.final <- paste0(title.final,'_SAP')}
+  if (model.list$LDA == 1){title.final <- paste0(title.final,'_LDA')}
+  if (model.list$PD == 1){title.final <- paste0(title.final,'_PD')}
   
   # compare price in BTC / USD
   if (compare.w.BTC == 1){compare.w.BTC <- '_wBTC'}
   if (compare.w.BTC == 0){compare.w.BTC <- '_wUSD'}
-  
-  # Read in coin list as Oct 17
-  coins_list <- read.csv("~/GitHub/NextBigCrypto-Senti/1. Crawlers/Top50_Oct7.csv")
-  position <- match(token_name, coins_list$symbol) # get position in queue
-  
-  result_filename <- paste0(position,'.',token_name, compare.w.BTC, title.final)
+
+  result_filename <- paste0(position,'.',token_name,'_',model.no, compare.w.BTC, title.final)
   return(result_filename)
 }
+# Read in coin list as Oct 17
+coins_list <- read.csv("~/GitHub/NextBigCrypto-Senti/1. Crawlers/Top50_Oct7.csv")
+position <- match(token_name, coins_list$symbol) # get position in queue
+
 ####################
+# Single
+###################
+# PD Models for BTC
 
-# ETH
-# HP - SAT - LDA
-# conditional check --> restart all flags
-if (HP == 1 | SAT == 1 | SAP == 1 | LDA == 1 | PD == 1){HP <- 0; SAT <- 0; SAP <- 0; LDA <- 0; PD <- 0}
+set <- c(15:17)
+for (count in 1:length(set)){
+  # get model's name
+  model.no <- set[count]
+  result_filename <- get.model.name(model.list[set[count],],model.no,compare.w.BTC,position)
+  
+  # Call funcs
+  source('~/GitHub/NextBigCrypto-Senti/3. Models Development/0. Final_Models_Func.R')
+  # clear environment
+  rm(list=ls()[! ls() %in% c('token_name','compare.w.BTC','position','count','model.list','get.model.name',
+                             'df.clean','df.senti','df.LDA','df.PD',
+                             'set')])
+  gc() # garbage collector
+  
+}
 
-HP <- 1
-SAT <- 1
-LDA <- 1
-result_filename <- get.model.name(HP,SAT,SAP,LDA,PD,compare.w.BTC)
+####################
+# Multiple
+# ETH / USD
+###################
+token_name <- 'ETH'
+compare.w.BTC <- 0 # compare with $USD
+for (count in 9:nrow(model.list)){
+  # get model's name
+  model.no <- set[count]
+  result_filename <- get.model.name(model.list[count,],model.no,compare.w.BTC,position)
+  
+  # Call funcs
+  source('~/GitHub/NextBigCrypto-Senti/3. Models Development/0. Final_Models_Func.R')
+  # clear environment
+  rm(list=ls()[! ls() %in% c('token_name','compare.w.BTC','position','count','model.list','get.model.name',
+                             'df.clean','df.senti','df.LDA','df.PD')])
+  gc() # garbage collector
+}
 
-source('~/GitHub/NextBigCrypto-Senti/3. Models Development/0. Final_Models_Func.R')
 
-# clear environment
-rm(list=ls()[! ls() %in% c('token_name','compare.w.BTC',
-                           'HP','SAT','SAP','LDA','PD','get.model.name')])
-
-# HP - SAP - LDA
-# conditional check --> restart all flags
-if (HP == 1 | SAT == 1 | SAP == 1 | LDA == 1 | PD == 1){HP <- 0; SAT <- 0; SAP <- 0; LDA <- 0; PD <- 0}
-
-HP <- 1
-SAP <- 1
-LDA <- 1
-result_filename <- get.model.name(HP,SAT,SAP,LDA,PD,compare.w.BTC)
-
-source('~/GitHub/NextBigCrypto-Senti/3. Models Development/0. Final_Models_Func.R')
-
-# clear environment
-rm(list=ls()[! ls() %in% c('token_name','compare.w.BTC',
-                           'HP','SAT','SAP','LDA','PD','get.model.name')])
 #######################################################################################
 # Get final results (combination of all)
 #######################################################################################
