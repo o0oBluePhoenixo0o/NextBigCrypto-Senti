@@ -30,17 +30,17 @@ clean.manual <- function(df){
   df <- df[-1,] # remove 1st col (again)
   return(df)
 }
-manual.true <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/0. Datasets/Manual/Manual_Label_Annotation.xlsx') %>%
+manual.true <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/0. Datasets/Manual raters/Manual_Label_Annotation.xlsx') %>%
   dplyr::select(sentiment) %>%
   rename(senti.true = sentiment)
 
-manual1 <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/0. Datasets/Manual/Tung_Manual.xlsx',
+manual1 <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/0. Datasets/Manual raters/Tung_Manual.xlsx',
                              col_names = FALSE)
-manual2 <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/0. Datasets/Manual/Tien_Manual.xlsx',
+manual2 <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/0. Datasets/Manual raters/Tien_Manual.xlsx',
                              col_names = FALSE) 
-manual3 <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/0. Datasets/Manual/Nha_Manual.xlsx',
+manual3 <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/0. Datasets/Manual raters/Nha_Manual.xlsx',
                              col_names = FALSE) 
-manual4 <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/0. Datasets/Manual/Huy_Manual.xlsx',
+manual4 <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/0. Datasets/Manual raters/Huy_Manual.xlsx',
                              col_names = FALSE) 
 manual.df <- cbind(
   manual.true,

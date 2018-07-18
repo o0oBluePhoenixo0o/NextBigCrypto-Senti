@@ -100,7 +100,7 @@ statistic <- df.final %>% count(symbol, sort = TRUE)
 
 openxlsx::write.xlsx(statistic,'~/GitHub/NextBigCrypto-Senti/Statistics.xlsx')
 
-###########
+############################################################################
 # Total Crypto Market cap (now)
 
 market_today <- get_marketcap_ticker_all()
@@ -135,10 +135,10 @@ jpeg(paste0('Cryptocurency_Cap','.jpg'), width = 800, height = 800)
 treemap(df2, index = 'formatted_market', vSize = 'market', title = 'Cryptocurrency Market Cap', fontsize.labels=c(12, 8), palette='RdYlGn')
 dev.off()
 
-##############
+#######################################################################
 # Price (timeseries)
 time.slot = 24
-token_name = 'ETH'
+token_name = 'BCH'
 
 price.df <- readxl::read_xlsx('~/GitHub/NextBigCrypto-Senti/1. Crawlers/Historical_Data_HR.xlsx') %>%
   filter(symbol == token_name) %>%
@@ -163,12 +163,129 @@ price.df$time <- as.Date(price.df$time)
 
 p1 <- ggplot(price.df, aes(time, close)) + geom_line() + 
       xlab("Time") + ylab("Close Price") + scale_x_date(date_minor_breaks = "7 day") +
-      ggtitle("ETH / USD Price")
+      ggtitle("BCH / USD Price")
 
 
 p2 <- ggplot(price.df, aes(time, priceBTC)) + geom_line(aes(group=1), colour="#000099") + 
       xlab("Time") + ylab("Close Price") + scale_x_date(date_minor_breaks = "7 day") +
-      ggtitle("ETH / BTC Price")
+      ggtitle("BCH / BTC Price")
 
 multiplot(p1, p2, cols=2)
  
+####################################################################
+# LDA topics graphs
+token_name <- 'BTC'
+# Load LDA result directly
+files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
+                    pattern = paste0('^',token_name,'_clean_LDA_'))
+df.LDA <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
+                  locale = locale(encoding = 'latin1'))
+df.LDA$status_id <- as.character(df.LDA$status_id)
+df.LDA$user_id <- as.character(df.LDA$user_id)
+
+count.df <- data.frame(topic = numeric(),
+                       count = numeric())
+min <- min(df.LDA$topic)
+max <- max(df.LDA$topic)
+
+# Count topic
+for (i in min:max){
+  a <- df.LDA %>% filter(topic == i) %>% count(topic)
+  count.df <- count.df %>% rbind(c(i,a$n))
+}
+names(count.df) <- c('topic','count')
+
+count.df %>% summarise(sum(count))
+
+#################
+# Predefined topics graphs
+
+# Load PD result directly
+files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
+                    pattern = paste0('^',token_name,'_clean_PD_'))
+df.PD <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
+                  locale = locale(encoding = 'latin1'))
+df.PD$status_id <- as.character(df.PD$status_id)
+df.PD$user_id <- as.character(df.PD$user_id)
+
+count.df <- data.frame(topic = numeric(),
+                       count = numeric())
+# Count topic 1 -- 10
+for (i in 1:10){
+  eval(parse(text = paste0('a <- df.PD %>% filter(topic',i,' == 1) %>% count(topic',i,')')))
+  count.df <- count.df %>% rbind(c(i,a$n))
+}
+names(count.df) <- c('topic','count')
+
+count.df %>% summarise(sum(count))
+
+####################################################################
+# Total number of tweets
+
+# Consolidate all available datasets into 1 big dataset
+setwd("~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/")
+
+
+# Extract users list from 50 datasets
+for (i in 1:nrow(coins_list)){
+  a <- as.data.frame(read_csv(dir(pattern=paste0('^',i,'_'))[1],
+                              locale = locale(encoding = 'latin1')))
+  
+  # Extract list of status
+  status <- a %>% select(created_at, status_id)
+  colnames(status) <- c('created_at','status_id')
+  
+  if (i == 1){total.status <- status}
+  if (i != 1){
+    # Merge to final set
+    total.status <- bind_rows(total.status,status)
+  }
+  print(paste0('Finish adding tweets from  ',coins_list$symbol[i]))
+}
+
+total.status <- total.status %>% distinct
+gc()
+total.count <- total.status %>% group_by(created_at) %>% summarise(n = n())
+
+hist(total.count$n)
+?hist
+min = as.Date('2017-09-30')
+max = as.Date('2018-06-20')
+ggplot(total.count) +
+  geom_line(aes(x=created_at,y=n), color = "#00AFBB", size =1) + 
+  scale_x_date(limits = c(min, max), date_breaks = "1 month", date_labels = "%b-%Y") +
+  labs(title = "Daily amount of tweets collected", x = "Date", y = "Number of tweets") +
+  theme(axis.text.x = element_text(angle = 30, vjust = 1.0, hjust = 1.0))
+
+############################
+# Final result 
+library(dplyr)
+
+result <- openxlsx::read.xlsx('~/GitHub/NextBigCrypto-Senti/3. Models Development/2.ETH_wBTC_FINAL.xlsx')
+
+names(result) <- c('Model','Interval','Time','Accuracy','F1','Algorithm')
+
+result$F1 <- as.numeric(result$F1)
+result$Time <- as.numeric(result$Time)
+# get all 3 intervals
+all <- result %>% filter(Model == 'LDA')  %>% arrange(Time)
+
+# get best out of 3 intervals
+best <- result %>% filter(Model == 'SAT') %>% group_by(Time) %>% slice(which.max(F1))  
+best 
+
+final <- result %>% group_by(Model) %>% slice(which.max(F1))  
+
+############################
+# Granger Causality Test for PD 
+
+# BTC
+token_name <- 'BTC'
+# Load PD result directly
+files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',
+                    pattern = paste0('^',token_name,'_clean_PD_'))
+df.PD <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/SentiTopic/',files),
+                  locale = locale(encoding = 'latin1'))
+df.PD$status_id <- as.character(df.PD$status_id)
+df.PD$user_id <- as.character(df.PD$user_id)
+

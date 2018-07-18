@@ -31,7 +31,7 @@ setwd("~/GitHub/NextBigCrypto-Senti")
 
 #######################################################
 # Load dataset base on token
-symbol <- 'ETH'
+symbol <- 'BCH'
 
 # Read in coin list as Oct 17
 coins_list <- read.csv("~/GitHub/NextBigCrypto-Senti/1. Crawlers/Top50_Oct7.csv")
@@ -44,9 +44,9 @@ df.clean <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/0. Datasets/Cleaned/',
 df.clean$status_id <- as.character(df.clean$status_id)
 df.clean$user_id <- as.character(df.clean$user_id)
 
+# Load full dataset
 files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/',
                     pattern = paste0('^',position,'_'))
-# Load full dataset
 df.full <- read_csv(paste0('~/GitHub/NextBigCrypto-Senti/1. Crawlers/1b. Report/',files),
                     locale = locale(encoding = 'latin1')) %>%
   dplyr::select(created_at, status_id,user_id, screen_name, text)

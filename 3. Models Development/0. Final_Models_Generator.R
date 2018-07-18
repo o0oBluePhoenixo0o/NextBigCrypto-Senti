@@ -9,9 +9,9 @@ gc()
 #################
 # Edit variables here for the model you want to generate
 # crypto token to be built models on
-token_name <- 'BTC'
+token_name <- NA
 # compare price with USD$ or BTC (Bitcoin) (0 = USD / 1 = BTC)
-compare.w.BTC <- 0
+compare.w.BTC <- NA
 
 # Legend
 # - Historical Price (HP)
@@ -83,19 +83,20 @@ get.model.name <- function(model.list,model.no,compare.w.BTC,position){
 }
 # Read in coin list as Oct 17
 coins_list <- read.csv("~/GitHub/NextBigCrypto-Senti/1. Crawlers/Top50_Oct7.csv")
-position <- match(token_name, coins_list$symbol) # get position in queue
 
 ####################
 # Single
 ###################
-# PD Models for BTC
-
-set <- c(15:17)
+# Add PD for ETH
+token_name <- 'BCH'
+compare.w.BTC <- 0 #USD
+position <- match(token_name, coins_list$symbol) # get position in queue
+set <- c(2:3)
 for (count in 1:length(set)){
   # get model's name
   model.no <- set[count]
   result_filename <- get.model.name(model.list[set[count],],model.no,compare.w.BTC,position)
-  
+
   # Call funcs
   source('~/GitHub/NextBigCrypto-Senti/3. Models Development/0. Final_Models_Func.R')
   # clear environment
@@ -103,18 +104,19 @@ for (count in 1:length(set)){
                              'df.clean','df.senti','df.LDA','df.PD',
                              'set')])
   gc() # garbage collector
-  
-}
 
+}
 ####################
 # Multiple
-# ETH / USD
 ###################
-token_name <- 'ETH'
-compare.w.BTC <- 0 # compare with $USD
-for (count in 9:nrow(model.list)){
+token_name <- 'BCH'
+compare.w.BTC <- 1 # compare with BTC
+position <- match(token_name, coins_list$symbol) # get position in queue
+#16 done
+for (count in 11:nrow(model.list)){
+  if (count == 16){next}
   # get model's name
-  model.no <- set[count]
+  model.no <- count
   result_filename <- get.model.name(model.list[count,],model.no,compare.w.BTC,position)
   
   # Call funcs
@@ -125,10 +127,12 @@ for (count in 9:nrow(model.list)){
   gc() # garbage collector
 }
 
-
 #######################################################################################
 # Get final results (combination of all)
 #######################################################################################
+
+token_name <- 'BCH'
+compare.w.BTC <- 0
 
 # Read in coin list as Oct 17
 coins_list <- read.csv("~/GitHub/NextBigCrypto-Senti/1. Crawlers/Top50_Oct7.csv")
@@ -137,11 +141,20 @@ position <- match(token_name, coins_list$symbol) # get position in queue
 # compare price in BTC / USD
 if (compare.w.BTC == 1){compare.w.BTC <- '_wBTC'}
 if (compare.w.BTC == 0){compare.w.BTC <- '_wUSD'}
-files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/3. Models Development/Results/',
-                    pattern = paste0('^',position,'.',token_name,compare.w.BTC,'_'))
 
+files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/3. Models Development/Results/',
+                    pattern = paste0('^',position,'.',token_name,'_','\\d*',compare.w.BTC,'_'))
+
+
+# files <- list.files(path = '~/GitHub/NextBigCrypto-Senti/3. Models Development/Results/',
+#                     pattern = paste0('^',position,'.',token_name,'_','*[:digit:]',
+#                                      '_',compare.w.BTC,'_'))
+# substr(files[1],14,nchar(files[1])-5)
+# test <- strsplit(files[2],'_')[[1]][2] # extract the position
 for (i in 1:length(files)){
-  name <- substr(files[i],12,nchar(files[i])-5)
+  test <- strsplit(files[i],'_')[[1]][2] # extract the position
+  if (nchar(test) == 1){name <- substr(files[i],14,nchar(files[i])-5)}
+  if (nchar(test) == 2){name <- substr(files[i],15,nchar(files[i])-5)}
   
   results <- readxl::read_xlsx(paste0('~/GitHub/NextBigCrypto-Senti/3. Models Development/Results/',files[i]))
   # Final results file
@@ -151,5 +164,6 @@ for (i in 1:length(files)){
     results.final <- rbind(results.final, results)}
 }
 # Save final result
-write.xlsx(results.final,paste0('~/GitHub/NextBigCrypto-Senti/3. Models Development/Results/',
+openxlsx::write.xlsx(results.final,paste0('~/GitHub/NextBigCrypto-Senti/3. Models Development/',
                                position,'.',token_name, compare.w.BTC,'_FINAL.xlsx'))
+files
