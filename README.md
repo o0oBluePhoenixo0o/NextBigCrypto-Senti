@@ -21,23 +21,37 @@ In the cryptocurrency market, many studies have tried to perform sentiment analy
 - Evaluation between pre-defined topics (8) and topic modeling generated topics (correlations comparisons)
 
 ## Apr 18
-- Complete framework for evaluation models. Contain 9 types of models:
-
-![Experiment Design](https://github.com/o0oBluePhoenixo0o/NextBigCrypto-Senti/blob/master/img/Experiment%20Design.JPG)
-
 - Complete "manual dataset" construction (~3200 observations labeled)
 - Finalize sentiment analysis on manual label dataset with evaluation (trained models vs packages)
 - Historical Price (HP) model version 1 complete as baseline (acc 46% with Recursive Feature Eliminations)
+- Complete framework for evaluation models. Contain 5 types of models with 17 combinations:
+
+![Experiment Design](https://github.com/o0oBluePhoenixo0o/NextBigCrypto-Senti/blob/master/img/Experiment%20Design.JPG)
+
+### Models type
+* **HP**: Historical Price
+* **SAT**: Sentiment Analysis (Trained model)
+* **SAP**: Sentiment Analysis (Packages model)
+* **LDA**: Topic Modeling - Latent Dirichlet Allocation
+* **PD**: Topic Modeling - Predefined Topics
+
+### Features (labeled with respect to time-interval)
+* **P<sub>t</sub>**: Price movement of the target cryptocurrency on day *t*. Categorical variable with 2 cases: up / down.
+* **T<sub>t</sub>**: Sentiment of tweets regarding the target cryptocurrency on day *t* using trained model. Have 4 variables for each set: total messages count and percentage of positive / neutral / negative.
+* **P<sub>kg<sub>t</sub></sub>**: Sentiment of tweets regarding the target cryptocurrency on day *t* using packages model. Have 4 variables for each set: total messages count and percentage of positive / neutral / negative.
+* **LDA<sub>t</sub>**: Topics distribution of tweets regarding the target cryptocurrency on day *t* using LDA model. The number of variables depends on the number of topics created by the LDA model, each variable is a topic with a percentage which displays the tweets distribution to that topic compare to the total number of tweets in that specific time interval.
+* **PD<sub>t</sub>**: Topics distribution of tweets regarding the target cryptocurrency on day *t* using predefined topics model. The number of variables are the 10 predefined topics, each variable is a topic with a percentage which displays the tweets distribution to that topic compare to the total number of tweets in that specific time interval.
+
 
 ## May 18
 - Revisit pre-processing pipeline:
 
 ![Preprocessing Pipeline](https://github.com/o0oBluePhoenixo0o/NextBigCrypto-Senti/blob/master/img/Preprocessingv3.JPG)
 
- - - Implement "Twitter bot detection" module (utilize package "botrnot")
- - - Custom abbreviations dictionary for translating popular acronyms / slangs on social media
- - - Enhance stop-words dictionary (exclude price movements related words / tokens affiliated removal)
- - - Lemmatization before tokenization
+ - Implement "Twitter bot detection" module (utilize package "botrnot")
+ - Custom abbreviations dictionary for translating popular acronyms / slangs on social media
+ - Enhance stop-words dictionary (exclude price movements related words / tokens affiliated removal)
+ - Lemmatization before tokenization
 
 ## June - July 18
 
