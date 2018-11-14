@@ -1,10 +1,9 @@
 
 
 # Crypto SentiTomo
-Previous researches have shown that securities and other financial instruments market movements can be predicted using real-time Twitter data. Not only that, multiple studies have tried to perform sentiment analysis on Twitter data in order to detect short and long term trends in the cryptocurrency market. Vast amount of information can be found in the form of unstructured text written by internet users in the cryptocurrency network. Crowd wisdom in those networks can be analyzed and proven to be a reliable indicator of major events affecting the markets.  However, not many have focused on neither other social media platforms nor different cryptocurrencies beside renown ones such as Bitcoin and Ethereum. This study proposes a machine learning based method which look into the public perceptions about cryptocurrency, utilizes not only Twitter but also data from other social media platforms such as Reddit in order to detect sentiments, topics and trends so that correlation between those factors and prices fluctuations of alternative coins can be analyzed.
+In the cryptocurrency market, many studies have tried to perform sentiment analysis on Twitter data in order to detect short and long term trends. However, not many studies focused on different cryptocurrencies beside the renown Bitcoin. This study proposes and evaluates different machine learning based methods which look into the public perceptions toward cryptocurrency, utilizes Twitter posts and market price data in order to detect sentiments and discover trending topics. Finally, designs an experiment machine learning pipeline to explore correlations between those factors and predict Bitcoin and non-Bitcoin cryptocurrencies prices movement against fiat currency USD and against Bitcoin price in a defined time-frame.
 
 ![Workflow](https://github.com/o0oBluePhoenixo0o/Crypto-Senti/blob/master/img/Workflow_Mar18.JPG)
-
 
 # Progress
 ## Oct - Nov 17 
