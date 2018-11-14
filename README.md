@@ -44,3 +44,16 @@ In the cryptocurrency market, many studies have tried to perform sentiment analy
 - Completed training all 17 models and tested successfully on Bitcoin, Ethereum and Litecoin priceline.
 - Obtained best performer in each token cases (BTC with HP_LDA, ETH with SAP_LDA and LTC with HP_SAT_PD)
 - Published packages and finalized paper for publication
+
+# Results
+
+- F1 scores best result for BTC/USD pair
+![F1_BTC_USD](https://github.com/o0oBluePhoenixo0o/NextBigCrypto-Senti/blob/master/img/F1_best_BTC_USD.JPG)
+
+- F1 scores best result for ETH/USD and ETH/BTC pairs
+![F1_BTC_USD](https://github.com/o0oBluePhoenixo0o/NextBigCrypto-Senti/blob/master/img/F1_best_ETH.JPG)
+
+- F1 scores best result for BCH/USD and BCH/BTC pairs
+![F1_BTC_USD](https://github.com/o0oBluePhoenixo0o/NextBigCrypto-Senti/blob/master/img/F1_best_BCH.JPG)
+
+
